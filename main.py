@@ -452,14 +452,66 @@ class Player:
         if self.ready: return pg.Color(0, 255, 0)
         else: return pg.Color(255, 0, 0)
 
+class Anim:
+    def __init__(self, obj: object, property: str, target: float, step: float, max_finish_dist: float) -> None:
+        self.object = obj
+        self.property = property
+        self.target = target
+        self.step = step
+        self.max_finish_dist = max_finish_dist
+
+        self.finished = False
+
+        if not hasattr(self.object, self.property):
+            raise Exception(f"Error while creating animation for {self.object}: {self.object} has no property \"{self.property}\"!")
+
+    @property
+    def gprop(self) -> float:
+        return getattr(self.object, self.property)
+    
+    def sprop(self, value: float) -> None:
+        setattr(self.object, self.property, value)
+
+    def update(self, dt: float) -> bool:
+        if abs(self.target - self.gprop) < max(self.step * dt, self.max_finish_dist):
+            self.sprop(self.target)
+            self.finished = True
+            return True
+        
+        self.sprop(self.gprop + self.step * dt)
+        return False
+
+class AnimManager:
+    def __init__(self) -> None:
+        if not hasattr(self.__class__, "anims"):
+            self.__class__.anims = []
+
+    def new(self, obj: object, property: str, target: float, step: float, max_finish_dist: float = 0.5) -> Anim:
+        anim = Anim(obj, property, target, step, max_finish_dist)
+        self.anims.append(anim)
+
+        return anim
+
+    def update(self, dt: float) -> None:
+        complete_anims = []
+
+        for anim in self.anims:
+            done = anim.update(dt)
+
+            if done:
+                complete_anims.append(anim)
+
+        for anim in complete_anims:
+            self.anims.remove(anim)
+
 class Safezone:
     NUM_POINTS = 100
     DISTANCE_TO_MOVE_REDUCTION = 1000
     TARGET_RADIUS_ALLOWANCE = 1.05
     SCALING = 80
-    SPEED = 0.003
+    SPEED = 10
 
-    def __init__(self, map_size_x: int, map_size_y: int, phase_config: Dict[int, Dict]) -> None:
+    def __init__(self, screen_width: int, screen_height: int, map_size_x: int, map_size_y: int, phase_config: Dict[int, Dict]) -> None:
         self.map_size_x = map_size_x
         self.map_size_y = map_size_y
 
@@ -469,31 +521,20 @@ class Safezone:
 
         self.color = pg.Color(255, 0, 0)
 
-        self.scaled_width = map_size_x // self.SCALING
-        self.scaled_height = map_size_y // self.SCALING
+        self.surface = pg.Surface((screen_width, screen_height))
 
-        self.polygon = self.generate_circle_polygon(self.start_radius, (self.map_size_x / 2, self.map_size_y / 2), self.NUM_POINTS)
-        self.surface = pg.Surface((self.scaled_width, self.scaled_height))
-        
+        self.anims = []
+
+        self.left_wall = 0
+        self.right_wall = self.map_size_x
+        self.top_wall = 0
+        self.bottom_wall = self.map_size_y
+
         self.next_phase()
 
-    def generate_circle_polygon(self, radius: float, center: Sequence[float], num_points: int) -> List[Sequence[float]]:
-        points = []
-
-        for i in range(num_points):
-            angle = 2 * pi * i / num_points
-
-            x = center[0] + radius * cos(angle)
-            y = center[1] + radius * sin(angle)
-
-            points.append((x, y))
-
-        return points
-
     def next_phase(self) -> None:
-        if self.phase_index >= len(self.phase_config) - 1:
+        if self.phase_index >= len(self.phase_config):
             self.target_radius = 0
-            self.distances_to_move = self.calculate_distances()
             return
 
         self.phase_index += 1
@@ -501,60 +542,37 @@ class Safezone:
         self.target = self.phase_config[self.phase_index]["target"]
         self.target_radius = self.phase_config[self.phase_index]["radius"]
         self.zone_speed = self.SPEED
-        self.distances_to_move = self.calculate_distances()
 
-    def calculate_distances(self) -> List[float]:
-        distances = []
-
-        for point in self.polygon:
-            distance_to_move = dist(point, self.target) - self.target_radius
-            distances.append(distance_to_move)
-
-        return distances
-
-    def shrink(self, dt: float) -> None:
-        new_polygon = []
-        radius_sum = 0
-
-        for p, point in enumerate(self.polygon):
-            angle_to_target = atan2(point[1] - self.target[1], point[0] - self.target[0])
-            curr_distance_to_move = dist(point, self.target) - self.target_radius
-
-            new_point = (point[0] - cos(angle_to_target) * self.distances_to_move[p] * dt * self.zone_speed, point[1] - sin(angle_to_target) * self.distances_to_move[p] * dt * self.zone_speed)
-            new_polygon.append(new_point)
-
-            radius_sum += curr_distance_to_move
-
-        avg_radius = radius_sum / len(self.polygon)
-        if avg_radius < 200:
-            self.next_phase()
-
-        self.polygon = new_polygon
+        self.anims.append(AnimManager().new(self, "left_wall", self.target[0] - self.target_radius, self.zone_speed))
+        self.anims.append(AnimManager().new(self, "right_wall", self.target[0] + self.target_radius, -self.zone_speed))
+        self.anims.append(AnimManager().new(self, "top_wall", self.target[1] - self.target_radius, self.zone_speed))
+        self.anims.append(AnimManager().new(self, "bottom_wall", self.target[1] + self.target_radius, -self.zone_speed))
 
     def update(self, dt: float) -> None:
-        self.shrink(dt)
+        for anim in self.anims:
+            if not anim.finished:
+                return
 
-    def draw(self) -> None:
-        screen_verts = [(px//100, py//100) for px, py in self.polygon]
-
-        self.surface.fill((255, 0, 0))
-        pg.draw.polygon(self.surface, (0, 0, 0), screen_verts)
+        self.next_phase()
 
     def blit(self, screen: pg.Surface, draw_parent: Shape) -> None:
-        x = max(min((draw_parent.x - screen.width / 2) / 100, self.surface.width), 0)
-        y = max(min((draw_parent.y - screen.height / 2) / 100, self.surface.height), 0)
+        self.surface.fill((0, 0, 0))
+        self.surface.set_alpha(180)
 
-        x_overlap = max(0, x + screen.width - self.map_size_x)
-        y_overlap = max(0, y + screen.height - self.map_size_y)
+        left_wall = self.left_wall - draw_parent.x
+        right_wall = self.right_wall - draw_parent.x 
+        top_wall = self.top_wall - draw_parent.y
+        bottom_wall = self.bottom_wall - draw_parent.y
 
-        width = screen.width / self.SCALING * 1.5 - x_overlap
-        height = screen.height / self.SCALING * 1.5 - y_overlap
+        pg.draw.rect(self.surface, (255, 0, 0), (0, 0, left_wall, screen.height))
+        pg.draw.rect(self.surface, (255, 0, 0), (right_wall, 0, screen.width - right_wall, screen.height))
+        pg.draw.rect(self.surface, (255, 0, 0), (0, 0, screen.width, top_wall))
+        pg.draw.rect(self.surface, (255, 0, 0), (0, bottom_wall, screen.width, screen.height - bottom_wall))
 
-        crop_area = pg.Rect(x, y, width, height)
-        cropped_surf = pg.transform.scale_by(self.surface.subsurface(crop_area), self.SCALING)
+        if left_wall > screen.width / 2 or right_wall < screen.width / 2 or top_wall > screen.height / 2 or bottom_wall < screen.height / 2:
+            draw_parent.take_damage(0.5)
 
-        screen.fill((255, 255, 255))
-        screen.blit(cropped_surf, (0, 0))
+        screen.blit(self.surface, (0, 0))
 
 class MainMenu:
     TIMER_LENGTH = 1
@@ -741,7 +759,9 @@ class ShapeRoyale:
         info = pg.display.get_desktop_sizes()[0]
         self.WIDTH = info[0]
         self.HEIGHT = info[1]
-        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT))
+        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
+
+        self.anim_manager = AnimManager()
 
         self.main_menu = MainMenu(self.screen)
 
@@ -750,7 +770,7 @@ class ShapeRoyale:
         self.bullet_img = pg.transform.smoothscale(pg.image.load("../ShapeRoyale/Data/assets/Bullet_Sprite.png").convert_alpha(), (10, 10))
 
         self.generate_safezone_phases(self.NUM_PHASES)
-        self.safezone = Safezone(self.MAP_SIZE_X, self.MAP_SIZE_Y, self.phase_config)
+        self.safezone = Safezone(self.screen.width, self.screen.height, self.MAP_SIZE_X, self.MAP_SIZE_Y, self.phase_config)
 
         self.shape_names = ["Square", "Triangle", "Circle"]
         self.shape_images = {
@@ -868,10 +888,11 @@ class ShapeRoyale:
                     pg.quit()
                     exit()
 
+            self.anim_manager.update(dt)
             self.safezone.update(dt)
 
             if time() - last_safezone_draw > 0.5:
-                self.safezone.draw()
+                #self.safezone.draw()
                 last_safezone_draw = time()
 
             self.screen.fill((0, 0, 0))
@@ -931,16 +952,16 @@ class ShapeRoyale:
             shape_width = self.player.rotated_shape_image.width
 
             # X Walls
-            if shape_pos[0] - shape_width // 2 - self.WIDTH // 2 < 0:
-                pg.draw.rect(self.screen, (255, 0, 0), (0, 0, (shape_pos[0] - shape_width // 2 - self.WIDTH // 2) * -1, self.HEIGHT))
-            if shape_pos[0] + shape_width * 1.5 + self.WIDTH // 2 > self.MAP_SIZE_X:
-                pg.draw.rect(self.screen, (255, 0, 0), (self.WIDTH - (shape_pos[0] + shape_width * 1.5 + self.WIDTH // 2 - self.MAP_SIZE_X), 0, self.WIDTH, self.HEIGHT))
-
-            # Y Walls
-            if shape_pos[1] - shape_width // 2 - self.HEIGHT // 2 < 0:
-                pg.draw.rect(self.screen, (255, 0, 0), (0, 0, self.WIDTH, (shape_pos[1] - shape_width // 2 - self.HEIGHT // 2) * -1))
-            if shape_pos[1] + shape_width * 1.5 + self.HEIGHT // 2 > self.MAP_SIZE_Y:
-                pg.draw.rect(self.screen, (255, 0, 0), (0, self.HEIGHT - (shape_pos[1] + shape_width * 1.5 + self.HEIGHT // 2 - self.MAP_SIZE_Y), self.WIDHT, self.HEIGHT))
+            #if shape_pos[0] - shape_width // 2 - self.WIDTH // 2 < 0:
+            #    pg.draw.rect(self.screen, (255, 0, 0), (0, 0, (shape_pos[0] - shape_width // 2 - self.WIDTH // 2) * -1, self.HEIGHT))
+            #if shape_pos[0] + shape_width * 1.5 + self.WIDTH // 2 > self.MAP_SIZE_X:
+            #    pg.draw.rect(self.screen, (255, 0, 0), (self.WIDTH - (shape_pos[0] + shape_width * 1.5 + self.WIDTH // 2 - self.MAP_SIZE_X), 0, self.WIDTH, self.HEIGHT))
+#
+            ## Y Walls
+            #if shape_pos[1] - shape_width // 2 - self.HEIGHT // 2 < 0:
+            #    pg.draw.rect(self.screen, (255, 0, 0), (0, 0, self.WIDTH, (shape_pos[1] - shape_width // 2 - self.HEIGHT // 2) * -1))
+            #if shape_pos[1] + shape_width * 1.5 + self.HEIGHT // 2 > self.MAP_SIZE_Y:
+            #    pg.draw.rect(self.screen, (255, 0, 0), (0, self.HEIGHT - (shape_pos[1] + shape_width * 1.5 + self.HEIGHT // 2 - self.MAP_SIZE_Y), self.WIDHT, self.HEIGHT))
 
             for powerup in self.powerups:
                 powerup.draw(self.screen, self.player)
