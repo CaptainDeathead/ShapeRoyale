@@ -9,7 +9,7 @@
         "shield_damage": 25,
         "damage": 8,
         "speed": 20,
-        "bullet_speed": 1.0,
+        "bullet_speed": 100.0,
         "penetration": 1.2
     },
     "Triangle": {
@@ -22,7 +22,7 @@
         "shield_damage": 15,
         "damage": 6,
         "speed": 30,
-        "bullet_speed": 1.0,
+        "bullet_speed": 100.0,
         "penetration": 1.1
     },
     "Circle": {
@@ -35,7 +35,7 @@
         "shield_damage": 40,
         "damage": 10,
         "speed": 10,
-        "bullet_speed": 1.0,
+        "bullet_speed": 100.0,
         "penetration": 1.5
     }
 }

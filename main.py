@@ -213,6 +213,8 @@ class Shape:
         self.is_player = is_player
         self.squad = squad
 
+        self.dead = False
+
         self.max_hp = self.info['hp'] # literal
         self.max_shield = self.info['shield'] # literal
         self.max_speed = self.info['speed'] # literal
@@ -296,7 +298,8 @@ class Shape:
         self.close_powerups = close_powerups
 
     def die(self) -> None:
-        print("Your dead now, if you didnt know.")
+        print("Your dead now, if you didn't know.")
+        self.dead = True
 
     def take_damage(self, damage: float) -> None:
         self.hp -= damage
@@ -512,6 +515,8 @@ class Safezone:
     SPEED = 10
 
     def __init__(self, screen_width: int, screen_height: int, map_size_x: int, map_size_y: int, phase_config: Dict[int, Dict]) -> None:
+        self.screen_width = screen_width
+        self.screen_height = screen_height
         self.map_size_x = map_size_x
         self.map_size_y = map_size_y
 
@@ -555,22 +560,27 @@ class Safezone:
 
         self.next_phase()
 
+    def get_wall_distance(self, player: Shape) -> tuple[float, float, float, float]:
+        left_wall = self.left_wall - player.x
+        right_wall = self.right_wall - player.x 
+        top_wall = self.top_wall - player.y
+        bottom_wall = self.bottom_wall - player.y
+
+        if left_wall > self.screen_width / 2 or right_wall < self.screen_width / 2 or top_wall > self.screen_height / 2 or bottom_wall < self.screen_height / 2:
+            player.take_damage(0.5)
+
+        return (left_wall, right_wall, top_wall, bottom_wall)
+
     def blit(self, screen: pg.Surface, draw_parent: Shape) -> None:
         self.surface.fill((0, 0, 0))
         self.surface.set_alpha(180)
 
-        left_wall = self.left_wall - draw_parent.x
-        right_wall = self.right_wall - draw_parent.x 
-        top_wall = self.top_wall - draw_parent.y
-        bottom_wall = self.bottom_wall - draw_parent.y
+        left_wall, right_wall, top_wall, bottom_wall = self.get_wall_distance(draw_parent)
 
         pg.draw.rect(self.surface, (255, 0, 0), (0, 0, left_wall, screen.height))
         pg.draw.rect(self.surface, (255, 0, 0), (right_wall, 0, screen.width - right_wall, screen.height))
         pg.draw.rect(self.surface, (255, 0, 0), (0, 0, screen.width, top_wall))
         pg.draw.rect(self.surface, (255, 0, 0), (0, bottom_wall, screen.width, screen.height - bottom_wall))
-
-        if left_wall > screen.width / 2 or right_wall < screen.width / 2 or top_wall > screen.height / 2 or bottom_wall < screen.height / 2:
-            draw_parent.take_damage(0.5)
 
         screen.blit(self.surface, (0, 0))
 
@@ -759,7 +769,7 @@ class ShapeRoyale:
         info = pg.display.get_desktop_sizes()[0]
         self.WIDTH = info[0]
         self.HEIGHT = info[1]
-        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
+        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN, display=1)
 
         self.anim_manager = AnimManager()
 
@@ -879,7 +889,6 @@ class ShapeRoyale:
         self.powerups.remove(powerup)
     
     def main(self) -> None:
-        last_safezone_draw = 0
         while 1:
             dt = self.clock.tick(60) / 1000.0
 
@@ -891,37 +900,38 @@ class ShapeRoyale:
             self.anim_manager.update(dt)
             self.safezone.update(dt)
 
-            if time() - last_safezone_draw > 0.5:
-                #self.safezone.draw()
-                last_safezone_draw = time()
-
             self.screen.fill((0, 0, 0))
             self.safezone.blit(self.screen, self.player)
 
             keys = pg.key.get_pressed()
 
-            if keys[pg.K_UP]: self.players[0].move_up(dt)
-            elif keys[pg.K_RIGHT]: self.players[0].move_right(dt)
-            elif keys[pg.K_DOWN]: self.players[0].move_down(dt)
-            elif keys[pg.K_LEFT]: self.players[0].move_left(dt)
+            if keys[pg.K_UP]: self.player.move_up(dt)
+            elif keys[pg.K_RIGHT]: self.player.move_right(dt)
+            elif keys[pg.K_DOWN]: self.player.move_down(dt)
+            elif keys[pg.K_LEFT]: self.player.move_left(dt)
 
-            if keys[pg.K_SPACE]: self.players[0].shoot()
+            if keys[pg.K_SPACE]: self.player.shoot()
             elif keys[pg.K_LSHIFT]:
-                if self.players[0].showing_powerup_popup:
-                    self.players[0].showing_powerup_popup = False
+                if self.player.showing_powerup_popup:
+                    self.player.showing_powerup_popup = False
+
+            for powerup in self.powerups:
+                powerup.draw(self.screen, self.player)
+
+            dead_players = []
 
             for player in self.players:
                 player.update(dt)
 
-                player.draw(self.screen, self.player)
+                left_wall, right_wall, top_wall, bottom_wall = self.safezone.get_wall_distance(player)
 
                 bullets_to_remove = []
                 for bullet in self.bullets:
+                    if player == self.player:
+                        bullet.draw(self.screen, self.player)
+                        bullet.move(dt)
+
                     if bullet.parent == player: continue
-
-                    bullet.draw(self.screen, self.player)
-
-                    bullet.move(dt)
 
                     if player.global_rect.colliderect(bullet.rect):
                         bullet.hit(player)
@@ -945,26 +955,15 @@ class ShapeRoyale:
                         powerup.pickup(player)
                     else:
                         close_powerups.append(powerup)
-
+                    
                 player.set_close_powerups(close_powerups)
+                player.draw(self.screen, self.player)
 
-            shape_pos = self.player.x, self.player.y
-            shape_width = self.player.rotated_shape_image.width
+                if player.dead:
+                    dead_players.append(player)
 
-            # X Walls
-            #if shape_pos[0] - shape_width // 2 - self.WIDTH // 2 < 0:
-            #    pg.draw.rect(self.screen, (255, 0, 0), (0, 0, (shape_pos[0] - shape_width // 2 - self.WIDTH // 2) * -1, self.HEIGHT))
-            #if shape_pos[0] + shape_width * 1.5 + self.WIDTH // 2 > self.MAP_SIZE_X:
-            #    pg.draw.rect(self.screen, (255, 0, 0), (self.WIDTH - (shape_pos[0] + shape_width * 1.5 + self.WIDTH // 2 - self.MAP_SIZE_X), 0, self.WIDTH, self.HEIGHT))
-#
-            ## Y Walls
-            #if shape_pos[1] - shape_width // 2 - self.HEIGHT // 2 < 0:
-            #    pg.draw.rect(self.screen, (255, 0, 0), (0, 0, self.WIDTH, (shape_pos[1] - shape_width // 2 - self.HEIGHT // 2) * -1))
-            #if shape_pos[1] + shape_width * 1.5 + self.HEIGHT // 2 > self.MAP_SIZE_Y:
-            #    pg.draw.rect(self.screen, (255, 0, 0), (0, self.HEIGHT - (shape_pos[1] + shape_width * 1.5 + self.HEIGHT // 2 - self.MAP_SIZE_Y), self.WIDHT, self.HEIGHT))
-
-            for powerup in self.powerups:
-                powerup.draw(self.screen, self.player)
+            for dead_player in dead_players:
+                self.players.remove(dead_player)
 
             self.screen.blit(self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255)), (20, 20))
 
