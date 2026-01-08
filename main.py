@@ -1,4 +1,7 @@
 import pygame as pg
+import neat
+import os
+import pickle
 
 from sound import generate_sine_wave
 
@@ -192,11 +195,12 @@ class Shape:
         "damage_growth": float('inf')
     }
 
-    def __init__(self, x: float, y: float, shape_name: str, shape_info: Dict[str, Dict], shape_image: pg.Surface, enemy_shape_image: pg.Surface, bullets: List[Bullet],
+    def __init__(self, x: float, y: float, index: int, shape_name: str, shape_info: Dict[str, Dict], shape_image: pg.Surface, enemy_shape_image: pg.Surface, bullets: List[Bullet],
                  bullet_img: pg.Surface, is_player: bool, squad: List[any] = []) -> None:
 
         self.x = x
         self.y = y
+        self.index = index
         self.rotation = 0
 
         self.shape_name = shape_name
@@ -298,7 +302,7 @@ class Shape:
         self.close_powerups = close_powerups
 
     def die(self) -> None:
-        print("Your dead now, if you didn't know.")
+        #print("Your dead now, if you didn't know.")
         self.dead = True
 
     def take_damage(self, damage: float) -> None:
@@ -402,7 +406,8 @@ class Shape:
         if self.is_player:
             ...
         else:
-            self.ai_move(dt)
+            ...
+            #self.ai_move(dt)
 
         self.rotated_shape_image = pg.transform.rotate(self.shape_image, self.rotation)
         self.rotated_enemy_shape_image = pg.transform.rotate(self.enemy_shape_image, self.rotation)
@@ -423,6 +428,7 @@ class Shape:
         screen.blit(self.info_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30))
 
         if self.showing_powerup_popup and draw_parent is self:
+            return # TODO: Disabled this while ai training
             screen.blit(self.powerup_popup, (screen.width // 2 - self.powerup_popup.width // 2, screen.height // 2 - self.powerup_popup.height // 2))
 
 class Screen(pg.Surface):
@@ -535,6 +541,8 @@ class Safezone:
         self.top_wall = 0
         self.bottom_wall = self.map_size_y
 
+        self.dt = 0.016 # 60fps
+
         self.next_phase()
 
     def next_phase(self) -> None:
@@ -554,6 +562,8 @@ class Safezone:
         self.anims.append(AnimManager().new(self, "bottom_wall", self.target[1] + self.target_radius, -self.zone_speed))
 
     def update(self, dt: float) -> None:
+        self.dt = dt
+
         for anim in self.anims:
             if not anim.finished:
                 return
@@ -567,7 +577,7 @@ class Safezone:
         bottom_wall = self.bottom_wall - player.y
 
         if left_wall > self.screen_width / 2 or right_wall < self.screen_width / 2 or top_wall > self.screen_height / 2 or bottom_wall < self.screen_height / 2:
-            player.take_damage(0.5)
+            player.take_damage(50 * self.dt)
 
         return (left_wall, right_wall, top_wall, bottom_wall)
 
@@ -755,8 +765,8 @@ class ShapeRoyale:
     MAP_SIZE_Y = MAP_SIZE
 
     NUM_PHASES = 4
-    NUM_PLAYERS = 100
-    NUM_POWERUPS = 12 * 50 # this must be divisible by the NUM_POWERUP_SECTIONS below
+    NUM_PLAYERS = 50
+    NUM_POWERUPS = 12 * 10 # this must be divisible by the NUM_POWERUP_SECTIONS below
     NUM_POWERUP_SECTIONS = 12
     POWERUP_SECTION_SIZE = int(NUM_POWERUPS / NUM_POWERUP_SECTIONS)
 
@@ -773,7 +783,7 @@ class ShapeRoyale:
 
         self.anim_manager = AnimManager()
 
-        self.main_menu = MainMenu(self.screen)
+        #self.main_menu = MainMenu(self.screen)
 
         self.clock = pg.time.Clock()
 
@@ -809,11 +819,55 @@ class ShapeRoyale:
 
         self.fps_font = pg.font.SysFont(f"{FONTS_PATH}/PressStart2P.ttf", 30)
 
-        self.main()
+        self.spectator_index = 0
+
+        #self.main()
+        self.train()
     
     @property
     def player(self) -> Player:
-        return self.players[0]
+        return self.players[self.spectator_index]
+
+    def eval_genomes(self, genomes, config):
+        self.generate_safezone_phases(self.NUM_PHASES)
+        self.safezone = Safezone(self.screen.width, self.screen.height, self.MAP_SIZE_X, self.MAP_SIZE_Y, self.phase_config)
+
+        self.bullets = []
+        self.players = self.generate_players()
+        self.powerups = self.generate_powerups()
+
+        self.powerup_sections = [(i*self.POWERUP_SECTION_SIZE, (i+1)*self.POWERUP_SECTION_SIZE) for i in range(self.NUM_POWERUP_SECTIONS)]
+        self.powerup_section_index = 0
+
+        nets = []
+
+        best_genome = None
+        for genome_id, genome in genomes:
+            genome.fitness = 0
+            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            nets.append(net)
+
+        self.main(genomes, nets)
+
+        with open("ai.pickle", "wb") as f:
+            pickle.dump(best_genome, f)
+
+    def train(self) -> None:
+        local_dir = os.path.dirname(__file__)
+        config_path = os.path.join(local_dir, "config.txt")
+
+        config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                    neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                    config_path)
+
+        p = neat.Population(config)
+
+        p.add_reporter(neat.StdOutReporter(True))
+        stats = neat.StatisticsReporter()
+        p.add_reporter(stats)
+
+        p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix="checkpoints/neat-checkpoint-"))
+        winner = p.run(self.eval_genomes, 1000)
 
     def generate_safezone_phases(self, num_phases: int) -> None:
         phase_config = {}
@@ -846,9 +900,10 @@ class ShapeRoyale:
     def generate_players(self) -> List[Shape]:
         shapes = []
 
-        name = self.shape_names[self.main_menu.player.shape_index]
+        #name = self.shape_names[self.main_menu.player.shape_index]
+        name = choice(self.shape_names) 
         new_shape = Shape(
-            randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
+            randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), 0, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
             self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, True, []
         )
         new_shape.squad.append(new_shape)
@@ -857,7 +912,7 @@ class ShapeRoyale:
         for i in range(self.NUM_PLAYERS - 1):
             name = choice(self.shape_names)
             new_shape = Shape(
-                randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
+                randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), i+1, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
                 self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, is_player=False, squad=[]
             )
             new_shape.squad.append(new_shape)
@@ -887,15 +942,49 @@ class ShapeRoyale:
 
     def on_powerup_pickup(self, powerup: Powerup) -> None:
         self.powerups.remove(powerup)
+
+    def choose_action(self, net, *args) -> int:
+        outputs = net.activate(args)
+
+        movement = 0
+        shoot = 0
+
+        if outputs[0] > 0.5: movement = 0
+        if outputs[1] > 0.5: movement = 1
+        if outputs[2] > 0.5: movement = 2
+        if outputs[3] > 0.5: movement = 3
+        if outputs[4] > 0.5: shoot = 1
+
+        return (movement, shoot)
     
-    def main(self) -> None:
+    def main(self, genomes: list = None, nets: list = None) -> None:
+        dt_mut = 1
+
         while 1:
-            dt = self.clock.tick(60) / 1000.0
+            if len(self.players) == 0:
+                if len(self.players) == 1:
+                    if genomes is not None:
+                        genomes[self.players[0].index][1].fitness += 15
+
+                return
+
+            dt = (self.clock.tick(999) / 1000.0) * dt_mut
+            dt_mut = 5
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     pg.quit()
                     exit()
+
+                if genomes is not None:
+                    if event.type == pg.MOUSEBUTTONDOWN:
+                        if event.button == 3:
+                            self.spectator_index -= 1
+                            if self.spectator_index < 0:
+                                self.spectator_index = len(self.players) - 1
+
+                        elif event.button == 1:
+                            self.spectator_index = (self.spectator_index + 1) % len(self.players)
 
             self.anim_manager.update(dt)
             self.safezone.update(dt)
@@ -910,7 +999,12 @@ class ShapeRoyale:
             elif keys[pg.K_DOWN]: self.player.move_down(dt)
             elif keys[pg.K_LEFT]: self.player.move_left(dt)
 
-            if keys[pg.K_SPACE]: self.player.shoot()
+            if keys[pg.K_SPACE]:
+                if genomes is not None:
+                    dt_mut = 1
+                else:
+                    self.player.shoot()
+
             elif keys[pg.K_LSHIFT]:
                 if self.player.showing_powerup_popup:
                     self.player.showing_powerup_popup = False
@@ -920,15 +1014,24 @@ class ShapeRoyale:
 
             dead_players = []
 
-            for player in self.players:
+            #for bullet in self.bullets:
+            #    bullet.move(dt)
+
+            for i, player in enumerate(self.players):
+                #player.shoot()
                 player.update(dt)
 
                 left_wall, right_wall, top_wall, bottom_wall = self.safezone.get_wall_distance(player)
+
+                closest_bullet_x = float('inf')
+                closest_bullet_y = float('inf')
 
                 bullets_to_remove = []
                 for bullet in self.bullets:
                     if player == self.player:
                         bullet.draw(self.screen, self.player)
+                    
+                    if i == 0:
                         bullet.move(dt)
 
                     if bullet.parent == player: continue
@@ -936,11 +1039,26 @@ class ShapeRoyale:
                     if player.global_rect.colliderect(bullet.rect):
                         bullet.hit(player)
                         bullets_to_remove.append(bullet)
+                        
+                        if genomes is not None:
+                            genomes[bullet.parent.index][1].fitness += 2
+                            genomes[player.index][1].fitness -= 1
 
                     if bullet.distance_travelled > self.MAX_BULLET_TRAVEL_DIST:
                         bullets_to_remove.append(bullet)
 
-                for bullet in bullets_to_remove: self.bullets.remove(bullet)
+                    if bullet not in bullets_to_remove:
+                        if bullet.x < closest_bullet_x and bullet.y < closest_bullet_y:
+                            closest_bullet_x = player.x - bullet.x
+                            closest_bullet_y = player.y - bullet.y
+
+                for bullet in bullets_to_remove:
+                    if bullet in self.bullets:
+                        self.bullets.remove(bullet)
+
+                if closest_bullet_x > 1000000 and closest_bullet_y > 1000000:
+                    closest_bullet_x = 0
+                    closest_bullet_y = 0
 
                 close_powerups = []
                 for powerup in self.powerups[self.powerup_sections[self.powerup_section_index][0]:self.powerup_sections[self.powerup_section_index][1]]:
@@ -953,19 +1071,57 @@ class ShapeRoyale:
 
                     if powerup_dist <= player.rect.w:
                         powerup.pickup(player)
+
+                        if genomes is not None:
+                            genomes[player.index][1].fitness += 3
                     else:
                         close_powerups.append(powerup)
                     
                 player.set_close_powerups(close_powerups)
                 player.draw(self.screen, self.player)
 
+                closest_powerup_x = 0
+                closest_powerup_y = 0
+
+                if len(close_powerups) > 0:
+                    closest_powerup_x = player.x - close_powerups[0].x
+                    closest_powerup_y = player.y - close_powerups[0].y
+
+                closest_player_x = 0
+                closest_player_y = 0
+
+                closest_dist = float('inf')
+                for other_player in self.players:
+                    if other_player is player: continue
+
+                    player_dist = dist((other_player.x, other_player.y), (player.x, player.y))
+                    if player_dist < closest_dist:
+                        closest_dist = player_dist
+                        closest_player_x = player.x - other_player.x
+                        closest_player_y = player.y - other_player.y
+
+                if nets is not None:
+                    movement, shoot = self.choose_action(nets[i], player.hp, left_wall, right_wall, top_wall, bottom_wall, closest_powerup_x, closest_powerup_y, closest_player_x, closest_player_y, closest_bullet_x, closest_bullet_y, int(player.rotation == 270), int(player.rotation == 90), int(player.rotation == 0), int(player.rotation == 180))
+
+                    if movement == 0: player.move_left(dt)
+                    elif movement == 1: player.move_right(dt)
+                    elif movement == 2: player.move_up(dt)
+                    elif movement == 3: player.move_down(dt)
+
+                    if shoot == 1: player.shoot()
+
                 if player.dead:
                     dead_players.append(player)
 
             for dead_player in dead_players:
+                if genomes is not None:
+                    genomes[dead_player.index][1].fitness -= 15
+
                 self.players.remove(dead_player)
+                self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
 
             self.screen.blit(self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255)), (20, 20))
+            self.screen.blit(self.fps_font.render(f"{self.spectator_index+1}/{len(self.players)}", True, (255, 255, 255)), (20, 40))
 
             self.powerup_section_index += 1
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0
