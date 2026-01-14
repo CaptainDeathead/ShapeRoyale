@@ -356,7 +356,14 @@ class ShapeRoyale:
         self.players = self.generate_players()
         self.powerups = self.generate_powerups()
 
-        #self.players[0].max_speed = 100
+        self.sounds = {
+            "hitHurt": pg.Sound("../ShapeRoyale/Data/assets/Sounds/hitHurt.wav"),
+            "laserShoot": pg.Sound("../ShapeRoyale/Data/assets/Sounds/laserShoot.wav"),
+            "powerUp": pg.Sound("../ShapeRoyale/Data/assets/Sounds/powerUp.wav"),
+        }
+        self.sounds["hitHurt"].set_volume(0.75)
+        self.sounds["laserShoot"].set_volume(0.75)
+        self.sounds["powerUp"].set_volume(0.75)
 
         self.powerup_sections = [(i*self.POWERUP_SECTION_SIZE, (i+1)*self.POWERUP_SECTION_SIZE) for i in range(self.NUM_POWERUP_SECTIONS)]
         self.powerup_section_index = 0
@@ -374,7 +381,10 @@ class ShapeRoyale:
     
     @property
     def player(self) -> Player:
-        return self.players[self.spectator_index]
+        try:
+            return self.players[self.spectator_index]
+        except:
+            return self.players[0]
 
     def generate_safezone_phases(self, num_phases: int) -> None:
         phase_config = {}
@@ -499,7 +509,8 @@ class ShapeRoyale:
                 elif keys[pg.K_LEFT]: self.player.move_left(dt)
 
                 if keys[pg.K_SPACE]:
-                    self.player.shoot()
+                    if self.player.shoot():
+                        self.sounds["laserShoot"].play()
 
                 elif keys[pg.K_LSHIFT]:
                     if self.player.showing_powerup_popup:
@@ -530,12 +541,12 @@ class ShapeRoyale:
                     if player == self.player:
                         bullet.draw(self.screen, self.player)
                     
-                    #if i == 0:
-                    #    bullet.move(dt)
-
                     if bullet.parent == player: continue
 
                     if player.global_rect.colliderect(bullet.rect):
+                        if player == self.player:
+                            self.sounds["hitHurt"].play()
+
                         bullet.hit(player)
                         bullets_to_remove.append(bullet)
                         
@@ -556,7 +567,6 @@ class ShapeRoyale:
                 close_powerups = []
                 closest_powerup = None
                 closest_dist = float('inf')
-                #for powerup in self.powerups[self.powerup_sections[self.powerup_section_index][0]:self.powerup_sections[self.powerup_section_index][1]]:
                 for y_offset in range(-1, 2):
                     y_tile = min(self.NUM_POWERUP_SECTIONS - 1, max(0, floor(player.y / self.POWERUP_SECTION_SIZE) + y_offset))
                     for x_offset in range(-1, 2):
@@ -568,7 +578,12 @@ class ShapeRoyale:
                             #powerup_dist = dist((powerup.x, powerup.y), (player.x, player.y))
                             powerup_dist = sqrt(powerup_dist_x ** 2 + powerup_dist_y ** 2)
 
+                            if powerup_dist > 2000: continue
+
                             if powerup_dist <= player.rect.w:
+                                if player == self.player:
+                                    self.sounds["powerUp"].play()
+
                                 self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].remove(powerup)
                                 powerup.pickup(player)
                             else:
@@ -600,16 +615,10 @@ class ShapeRoyale:
                     top_wall += self.WIDTH / 2
                     bottom_wall += self.WIDTH / 2
 
-                    #x_walls_dist = max(-1, min(1, (player.x - self.safezone.left_wall + self.WIDTH / 2) / (self.safezone.right_wall - self.safezone.left_wall + 0.00000000000000000001) * 2 - 1))
-                    #y_walls_dist = max(-1, min(1, (player.y - self.safezone.top_wall + self.HEIGHT / 2) / (self.safezone.bottom_wall - self.safezone.top_wall + 0.00000000000000000001) * 2 - 1))
-
                     right_wall_dist = max(0, min(1, (player.x - self.safezone.left_wall + self.WIDTH / 2) / (self.safezone.right_wall - self.safezone.left_wall + 0.00000000000000000001)))
                     left_wall_dist = 1 - right_wall_dist
                     bottom_wall_dist = max(0, min(1, (player.y - self.safezone.top_wall + self.HEIGHT / 2) / (self.safezone.bottom_wall - self.safezone.top_wall + 0.00000000000000000001)))
                     top_wall_dist = 1 - bottom_wall_dist
-
-                    #if i == self.spectator_index:
-                    #    print(round(top_wall_dist, 2), round(bottom_wall_dist, 6))
 
                     danger = max(left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist)
 
@@ -638,6 +647,8 @@ class ShapeRoyale:
             pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, (self.safezone.bottom_wall + self.HEIGHT / 2) / self.MAP_SIZE * 200, 200, 200))
 
             pg.draw.rect(self.minimap_surf, (0, 0, 255), (self.player.x / self.MAP_SIZE * 200 - 1, self.player.y / self.MAP_SIZE * 200 - 1, 2, 2))
+
+            pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
 
             if self.spectating:
@@ -650,6 +661,8 @@ class ShapeRoyale:
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0
 
             self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
+            if self.spectator_index < 0:
+                self.spectator_index = 0
 
             pg.display.flip()
 

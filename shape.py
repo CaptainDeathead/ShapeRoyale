@@ -241,7 +241,7 @@ class Shape:
             if not action_taken:
                 position_x()
 
-    def shoot(self) -> None:
+    def shoot(self) -> bool:
         if time() - self.last_shoot_time >= 1 / self.firerate:
             self.last_shoot_time = time()
 
@@ -252,6 +252,8 @@ class Shape:
                 case 270: bullet_vel = [self.max_speed * (self.bullet_speed + 1) / 2.5, 0]
 
             self.bullets.append(Bullet(self, self.x, self.y, bullet_vel, self.damage, self.damage_growth, self.poison_damage, self.penetration, self.lifesteal, self.bullet_img))
+            return True
+        return False
 
     def fight_player(self, dt: float, closest_player: Player) -> None:
         dx = closest_player.x - self.x
@@ -310,12 +312,18 @@ class Shape:
             if abs(wall_distance) > 0.005: continue
 
             match i:
-                case 0: self.move_left(dt)
-                case 1: self.move_right(dt)
-                case 2: self.move_up(dt)
-                case 3: self.move_down(dt)
-
-            self.target = (randint(0, self.map_size), randint(0, self.map_size))
+                case 0:
+                    self.move_left(dt)
+                    self.target = (self.x, randint(0, self.map_size))
+                case 1:
+                    self.move_right(dt)
+                    self.target = (self.x, randint(0, self.map_size))
+                case 2:
+                    self.move_up(dt)
+                    self.target = (randint(0, self.map_size), self.y)
+                case 3:
+                    self.move_down(dt)
+                    self.target = (randint(0, self.map_size), self.y)
             return
 
         if player_dist < 1000:
