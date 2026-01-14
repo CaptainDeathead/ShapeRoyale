@@ -21,6 +21,12 @@
                 "effect": "player.speed.percentage_increase",
                 "value": 1.1
             },
+            "Solar Panel": {
+                "blurb": "Don't give this to vampires...",
+                "description": "Health regenerates itself by +0.5HP per second",
+                "effect": "player.healthregenrate.increase",
+                "value": 0.5
+            },
             "Self-healing Membrane": {
                 "blurb": "You may slice me down, but you'll be doing it for a long time...",
                 "description": "Increases shield regeneration rate by 20%",
@@ -95,9 +101,9 @@
         "types": {
             "Pacemaker": {
                 "blurb": "Waaiiitttiiinnngggg for my enimies to catch up...",
-                "description": "Health regenerates itself by +5HP per second",
+                "description": "Health regenerates itself by +10HP per second",
                 "effect": "player.healthregenrate.increase",
-                "value": 5
+                "value": 10
             },
             "Plasma Gun": {
                 "blurb": "An electric shock is quite the nip!",

@@ -1,13 +1,11 @@
 import pygame as pg
-import neat
 import os
-import pickle
 
 from sound import generate_sine_wave
 
 from time import time
 from json import loads
-from math import dist, sin, cos, atan2, pi, sqrt
+from math import dist, sin, cos, atan2, pi, sqrt, floor, ceil
 from ast import literal_eval
 from random import randint, choice, uniform
 #from shapely import box, Polygon
@@ -28,6 +26,10 @@ startup_str = """
 print(startup_str)
 
 pg.init()
+
+def obj_dist(obj1: object, obj2: object) -> float:
+    """Returns the distance between 2 objects with x and y position properties"""
+    return dist((obj1.x, obj1.y), (obj2.x, obj2.y))
 
 class Poison:
     def __init__(self, parent: any, deal_damage_func: object, on_poison_end: object, damage: int, duration: int, lifesteal: float) -> None:
@@ -172,6 +174,7 @@ class Powerup:
 
     def pickup(self, player: any) -> None:
         player.parse_effect(self.effect, self.value)
+        player.collected_powerups.append((self.rarity, self.powerup_info, self.on_pickup))
         player.show_powerup_popup(self.render_popup())
 
         self.on_pickup(self)
@@ -195,8 +198,10 @@ class Shape:
         "damage_growth": float('inf')
     }
 
-    def __init__(self, x: float, y: float, index: int, shape_name: str, shape_info: Dict[str, Dict], shape_image: pg.Surface, enemy_shape_image: pg.Surface, bullets: List[Bullet],
+    def __init__(self, map_size: int, x: float, y: float, index: int, shape_name: str, shape_info: Dict[str, Dict], shape_image: pg.Surface, enemy_shape_image: pg.Surface, bullets: List[Bullet],
                  bullet_img: pg.Surface, is_player: bool, squad: List[any] = []) -> None:
+
+        self.map_size = map_size
 
         self.x = x
         self.y = y
@@ -240,6 +245,7 @@ class Shape:
 
         self.bullets = bullets
         self.poisons = []
+        self.collected_powerups = []
 
         self.showing_powerup_popup = False
         self.powerup_popup = None
@@ -247,9 +253,12 @@ class Shape:
         self.rect = pg.Rect(0, 0, self.shape_image.width, self.shape_image.height)
 
         self.close_powerups = []
-        self.target = None
+        self.target = (randint(0, self.map_size), randint(0, self.map_size))
 
         self.info_surf = pg.Surface((100, 40), pg.SRCALPHA)
+
+        self.num_inputs = 0
+        self.prioritises_x = bool(randint(0, 1))
 
     @property
     def global_rect(self) -> pg.Rect: return pg.Rect(self.x - self.rotated_shape_image.width * 0.5, self.y - self.rotated_shape_image.height * 0.5, self.rotated_shape_image.width, self.rotated_shape_image.height)
@@ -357,12 +366,32 @@ class Shape:
         abs_x = abs(rx)
         abs_y = abs(ry)
 
-        if abs_x > abs_y:
-            if rx < 0: self.move_left(dt)
-            else: self.move_right(dt)
+        def position_x() -> bool:
+            """Returns if it took an action"""
+            if abs_x > 20:
+                if rx < 0: self.move_left(dt)
+                else: self.move_right(dt)
+
+                return True
+            return False
+
+        def position_y() -> bool:
+            if abs_y > 20:
+                if ry < 0: self.move_up(dt)
+                else: self.move_down(dt)
+
+                return True
+            return False
+
+        action_taken = False
+        if self.prioritises_x:
+            action_taken = action_taken or position_x()
+            if not action_taken:
+                position_y()
         else:
-            if ry < 0: self.move_up(dt)
-            else: self.move_down(dt)
+            action_taken = action_taken or position_y()
+            if not action_taken:
+                position_x()
 
     def shoot(self) -> None:
         if time() - self.last_shoot_time >= 1 / self.firerate:
@@ -376,16 +405,80 @@ class Shape:
 
             self.bullets.append(Bullet(self, self.x, self.y, bullet_vel, self.damage, self.damage_growth, self.poison_damage, self.penetration, self.lifesteal, self.bullet_img))
 
-    def ai_move(self, dt: float) -> None:
-        if self.target is not None:
-            if dist((self.x, self.y), self.target) < 5:
-                self.target = None
-            else:
-                self.move_to(self.target[0], self.target[1], dt)
-                return
+    def fight_player(self, dt: float, closest_player: Player) -> None:
+        dx = closest_player.x - self.x
+        dy = closest_player.y - self.y
 
-        if len(self.close_powerups) > 0:
-            self.target = (self.close_powerups[0].x - self.close_powerups[0].WIDTH // 2, self.close_powerups[0].y - self.close_powerups[0].WIDTH // 2)
+        def position_x() -> bool:
+            """Returns if it took an action"""
+            if abs(dx) < 40:
+                # We are inline with the enemy but we just need to face them and then shoot them
+                if dy < 0:
+                    self.move_down(dt)
+                    self.move_up(dt)
+                else:
+                    self.move_up(dt)
+                    self.move_down(dt)
+                self.shoot()
+                return True
+            return False
+
+        def position_y() -> bool:
+            """Returns if it took an action"""
+            if abs(dy) < 40:
+                # We are inline with the enemy but we just need to face them and then shoot them
+                if dx < 0:
+                    self.move_right(dt)
+                    self.move_left(dt)
+                else:
+                    self.move_left(dt)
+                    self.move_right(dt)
+                self.shoot()
+                return True
+            return False
+
+        action_taken = False
+        if self.prioritises_x:
+            action_taken = action_taken or position_x()
+            if not action_taken:
+                position_y()
+        else:
+            action_taken = action_taken or position_y()
+            if not action_taken:
+                position_x()
+        
+        if not action_taken:
+            self.move_to(closest_player.x, closest_player.y, dt)
+
+    def ai_move(self, dt: float, wall_distances: tuple[float], closest_powerup: Powerup | None, closest_player: Player | None, closest_bullet: Bullet | None) -> None:
+        if closest_powerup is not None:
+            powerup_dist = obj_dist(closest_powerup, self)
+        if closest_player is not None:
+            player_dist = obj_dist(closest_player, self)
+        if closest_bullet is not None:
+            bullet_dist = obj_dist(closest_bullet, self)
+
+        for i, wall_distance in enumerate(wall_distances):
+            if abs(wall_distance) > 0.005: continue
+
+            match i:
+                case 0: self.move_left(dt)
+                case 1: self.move_right(dt)
+                case 2: self.move_up(dt)
+                case 3: self.move_down(dt)
+
+            self.target = (randint(0, self.map_size), randint(0, self.map_size))
+            return
+
+        if player_dist < 1000:
+            self.fight_player(dt, closest_player)
+        elif closest_powerup is not None:
+            self.move_to(closest_powerup.x, closest_powerup.y, dt)
+        else:
+            self.move_to(self.target[0], self.target[1], dt)
+
+            if dist((self.x, self.y), self.target) < 40:
+                self.target = (randint(0, self.map_size), randint(0, self.map_size))
 
     def render_info_surf(self) -> None:
         self.info_surf.fill((90, 90, 90))
@@ -402,12 +495,6 @@ class Shape:
 
         self.give_hp(self.health_regen_rate * dt)
         self.give_shield_hp(self.shield_regen_rate * dt)
-
-        if self.is_player:
-            ...
-        else:
-            ...
-            #self.ai_move(dt)
 
         self.rotated_shape_image = pg.transform.rotate(self.shape_image, self.rotation)
         self.rotated_enemy_shape_image = pg.transform.rotate(self.enemy_shape_image, self.rotation)
@@ -427,8 +514,7 @@ class Shape:
         screen.blit(image, (self.x - screen_rect.x, self.y - screen_rect.y))
         screen.blit(self.info_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30))
 
-        if self.showing_powerup_popup and draw_parent is self:
-            return # TODO: Disabled this while ai training
+        if self.showing_powerup_popup and draw_parent is self and self.is_player:
             screen.blit(self.powerup_popup, (screen.width // 2 - self.powerup_popup.width // 2, screen.height // 2 - self.powerup_popup.height // 2))
 
 class Screen(pg.Surface):
@@ -577,7 +663,7 @@ class Safezone:
         bottom_wall = self.bottom_wall - player.y
 
         if left_wall > self.screen_width / 2 or right_wall < self.screen_width / 2 or top_wall > self.screen_height / 2 or bottom_wall < self.screen_height / 2:
-            player.take_damage(50 * self.dt)
+            player.take_damage(50 * self.dt / player.zone_resistance)
 
         return (left_wall, right_wall, top_wall, bottom_wall)
 
@@ -760,15 +846,15 @@ class ShapeRoyale:
     WIDTH: int = PYGAME_INFO.current_w
     HEIGHT: int = PYGAME_INFO.current_h
 
-    MAP_SIZE = 10_000
+    MAP_SIZE = 30_000
     MAP_SIZE_X = MAP_SIZE
     MAP_SIZE_Y = MAP_SIZE
 
     NUM_PHASES = 4
-    NUM_PLAYERS = 50
-    NUM_POWERUPS = 12 * 10 # this must be divisible by the NUM_POWERUP_SECTIONS below
-    NUM_POWERUP_SECTIONS = 12
-    POWERUP_SECTION_SIZE = int(NUM_POWERUPS / NUM_POWERUP_SECTIONS)
+    NUM_PLAYERS = 100
+    NUM_POWERUPS = 24 * 15 # this must be divisible by the NUM_POWERUP_SECTIONS below
+    NUM_POWERUP_SECTIONS = 24 
+    POWERUP_SECTION_SIZE = MAP_SIZE / NUM_POWERUP_SECTIONS
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
@@ -808,6 +894,8 @@ class ShapeRoyale:
         with open("../ShapeRoyale/Data/powerups.json", "r") as f:
             self.powerup_info = loads(f.read())
 
+        self.powerup_grid = [[[] for _ in range(self.NUM_POWERUP_SECTIONS)] for _ in range(self.NUM_POWERUP_SECTIONS)]
+
         self.bullets = []
         self.players = self.generate_players()
         self.powerups = self.generate_powerups()
@@ -820,59 +908,20 @@ class ShapeRoyale:
         self.fps_font = pg.font.SysFont(f"{FONTS_PATH}/PressStart2P.ttf", 30)
 
         self.spectator_index = 0
+        self.spectating = False
+        self.player.is_player = not self.spectating
 
-        #self.main()
-        self.train()
+        self.main()
     
     @property
     def player(self) -> Player:
         return self.players[self.spectator_index]
 
-    def eval_genomes(self, genomes, config):
-        self.generate_safezone_phases(self.NUM_PHASES)
-        self.safezone = Safezone(self.screen.width, self.screen.height, self.MAP_SIZE_X, self.MAP_SIZE_Y, self.phase_config)
-
-        self.bullets = []
-        self.players = self.generate_players()
-        self.powerups = self.generate_powerups()
-
-        self.powerup_sections = [(i*self.POWERUP_SECTION_SIZE, (i+1)*self.POWERUP_SECTION_SIZE) for i in range(self.NUM_POWERUP_SECTIONS)]
-        self.powerup_section_index = 0
-
-        nets = []
-
-        best_genome = None
-        for genome_id, genome in genomes:
-            genome.fitness = 0
-            net = neat.nn.FeedForwardNetwork.create(genome, config)
-            nets.append(net)
-
-        self.main(genomes, nets)
-
-        with open("ai.pickle", "wb") as f:
-            pickle.dump(best_genome, f)
-
-    def train(self) -> None:
-        local_dir = os.path.dirname(__file__)
-        config_path = os.path.join(local_dir, "config.txt")
-
-        config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                                    neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                                    config_path)
-
-        p = neat.Population(config)
-
-        p.add_reporter(neat.StdOutReporter(True))
-        stats = neat.StatisticsReporter()
-        p.add_reporter(stats)
-
-        p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix="checkpoints/neat-checkpoint-"))
-        winner = p.run(self.eval_genomes, 1000)
-
     def generate_safezone_phases(self, num_phases: int) -> None:
         phase_config = {}
 
-        radius = (self.MAP_SIZE * sqrt(2)) // 2
+        #radius = (self.MAP_SIZE * sqrt(2)) // 2
+        radius = self.MAP_SIZE // 2
         target = (self.MAP_SIZE_X / 2, self.MAP_SIZE_Y / 2)
         time = 60
 
@@ -903,7 +952,7 @@ class ShapeRoyale:
         #name = self.shape_names[self.main_menu.player.shape_index]
         name = choice(self.shape_names) 
         new_shape = Shape(
-            randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), 0, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
+            self.MAP_SIZE, randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), 0, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
             self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, True, []
         )
         new_shape.squad.append(new_shape)
@@ -912,7 +961,7 @@ class ShapeRoyale:
         for i in range(self.NUM_PLAYERS - 1):
             name = choice(self.shape_names)
             new_shape = Shape(
-                randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), i+1, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
+                self.MAP_SIZE, randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), i+1, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
                 self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, is_player=False, squad=[]
             )
             new_shape.squad.append(new_shape)
@@ -936,47 +985,38 @@ class ShapeRoyale:
             elif rarity_number <= legendary_rarity_max + rare_rarity_max + uncommon_rarity_max: rarity = "Uncommon"
             else: rarity = "Common"
 
-            powerups.append(Powerup(randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), rarity, self.powerup_info, self.on_powerup_pickup))
+            powerup = Powerup(randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), rarity, self.powerup_info, self.on_powerup_pickup)
+            powerups.append(powerup)
+            self.powerup_grid[floor(powerup.y // self.POWERUP_SECTION_SIZE)][floor(powerup.x // self.POWERUP_SECTION_SIZE)].append(powerup)
 
         return powerups
 
     def on_powerup_pickup(self, powerup: Powerup) -> None:
         self.powerups.remove(powerup)
 
-    def choose_action(self, net, *args) -> int:
-        outputs = net.activate(args)
-
-        movement = 0
-        shoot = 0
-
-        if outputs[0] > 0.5: movement = 0
-        if outputs[1] > 0.5: movement = 1
-        if outputs[2] > 0.5: movement = 2
-        if outputs[3] > 0.5: movement = 3
-        if outputs[4] > 0.5: shoot = 1
-
-        return (movement, shoot)
-    
-    def main(self, genomes: list = None, nets: list = None) -> None:
+    def main(self) -> None:
         dt_mut = 1
+        dt_sum = 0
 
         while 1:
-            if len(self.players) == 0:
-                if len(self.players) == 1:
-                    if genomes is not None:
-                        genomes[self.players[0].index][1].fitness += 15
+            if len(self.players) <= 1:
+                if len(self.players) == 0:
+                    print(f"Tie")
+                else:
+                    print(f"Winner: {self.players[0]}")
 
                 return
 
             dt = (self.clock.tick(999) / 1000.0) * dt_mut
-            dt_mut = 5
+            dt_mut = 1
+            dt_sum += dt
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     pg.quit()
                     exit()
 
-                if genomes is not None:
+                if self.spectating:
                     if event.type == pg.MOUSEBUTTONDOWN:
                         if event.button == 3:
                             self.spectator_index -= 1
@@ -994,28 +1034,26 @@ class ShapeRoyale:
 
             keys = pg.key.get_pressed()
 
-            if keys[pg.K_UP]: self.player.move_up(dt)
-            elif keys[pg.K_RIGHT]: self.player.move_right(dt)
-            elif keys[pg.K_DOWN]: self.player.move_down(dt)
-            elif keys[pg.K_LEFT]: self.player.move_left(dt)
+            if not self.spectating:
+                if keys[pg.K_UP]: self.player.move_up(dt)
+                elif keys[pg.K_RIGHT]: self.player.move_right(dt)
+                elif keys[pg.K_DOWN]: self.player.move_down(dt)
+                elif keys[pg.K_LEFT]: self.player.move_left(dt)
 
-            if keys[pg.K_SPACE]:
-                if genomes is not None:
-                    dt_mut = 1
-                else:
+                if keys[pg.K_SPACE]:
                     self.player.shoot()
 
-            elif keys[pg.K_LSHIFT]:
-                if self.player.showing_powerup_popup:
-                    self.player.showing_powerup_popup = False
+                elif keys[pg.K_LSHIFT]:
+                    if self.player.showing_powerup_popup:
+                        self.player.showing_powerup_popup = False
 
             for powerup in self.powerups:
                 powerup.draw(self.screen, self.player)
 
             dead_players = []
 
-            #for bullet in self.bullets:
-            #    bullet.move(dt)
+            for bullet in self.bullets:
+                bullet.move(dt)
 
             for i, player in enumerate(self.players):
                 #player.shoot()
@@ -1023,16 +1061,16 @@ class ShapeRoyale:
 
                 left_wall, right_wall, top_wall, bottom_wall = self.safezone.get_wall_distance(player)
 
-                closest_bullet_x = float('inf')
-                closest_bullet_y = float('inf')
+                closest_bullet = None
+                closest_dist = float('inf')
 
                 bullets_to_remove = []
                 for bullet in self.bullets:
                     if player == self.player:
                         bullet.draw(self.screen, self.player)
                     
-                    if i == 0:
-                        bullet.move(dt)
+                    #if i == 0:
+                    #    bullet.move(dt)
 
                     if bullet.parent == player: continue
 
@@ -1040,56 +1078,52 @@ class ShapeRoyale:
                         bullet.hit(player)
                         bullets_to_remove.append(bullet)
                         
-                        if genomes is not None:
-                            genomes[bullet.parent.index][1].fitness += 2
-                            genomes[player.index][1].fitness -= 1
-
                     if bullet.distance_travelled > self.MAX_BULLET_TRAVEL_DIST:
                         bullets_to_remove.append(bullet)
 
                     if bullet not in bullets_to_remove:
-                        if bullet.x < closest_bullet_x and bullet.y < closest_bullet_y:
-                            closest_bullet_x = player.x - bullet.x
-                            closest_bullet_y = player.y - bullet.y
+                        bullet_dist = dist((bullet.x, bullet.y), (player.x, player.y))
+
+                        if bullet_dist < closest_dist:
+                            closest_dist = bullet_dist
+                            closest_bullet = bullet
 
                 for bullet in bullets_to_remove:
                     if bullet in self.bullets:
                         self.bullets.remove(bullet)
 
-                if closest_bullet_x > 1000000 and closest_bullet_y > 1000000:
-                    closest_bullet_x = 0
-                    closest_bullet_y = 0
-
                 close_powerups = []
-                for powerup in self.powerups[self.powerup_sections[self.powerup_section_index][0]:self.powerup_sections[self.powerup_section_index][1]]:
-                    powerup_dist_x = abs(powerup.x - player.x)
-                    powerup_dist_y = abs(powerup.y - player.y)
-    
-                    if powerup_dist_x <= -1000 or powerup_dist_x >= 1000 or powerup_dist_y <= -1000 or powerup_dist_y >= 1000: continue
+                closest_powerup = None
+                closest_dist = float('inf')
+                #for powerup in self.powerups[self.powerup_sections[self.powerup_section_index][0]:self.powerup_sections[self.powerup_section_index][1]]:
+                for y_offset in range(-1, 2):
+                    y_tile = min(self.NUM_POWERUP_SECTIONS - 1, max(0, floor(player.y / self.POWERUP_SECTION_SIZE) + y_offset))
+                    for x_offset in range(-1, 2):
+                        x_tile = min(self.NUM_POWERUP_SECTIONS - 1, max(0, floor(player.x / self.POWERUP_SECTION_SIZE) + x_offset))
+                        for powerup in self.powerup_grid[y_tile][x_tile]:
+                            powerup_dist_x = abs(powerup.x - player.x)
+                            powerup_dist_y = abs(powerup.y - player.y)
+            
+                            #powerup_dist = dist((powerup.x, powerup.y), (player.x, player.y))
+                            powerup_dist = sqrt(powerup_dist_x ** 2 + powerup_dist_y ** 2)
 
-                    powerup_dist = dist((powerup.x, powerup.y), (player.x, player.y))
+                            if powerup_dist <= player.rect.w:
+                                self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].remove(powerup)
+                                powerup.pickup(player)
+                            else:
+                                close_powerups.append(powerup)
 
-                    if powerup_dist <= player.rect.w:
-                        powerup.pickup(player)
-
-                        if genomes is not None:
-                            genomes[player.index][1].fitness += 3
-                    else:
-                        close_powerups.append(powerup)
+                            if powerup_dist < closest_dist:
+                                closest_dist = powerup_dist
+                                closest_powerup = powerup
                     
+                if player == self.player and closest_powerup is not None:
+                    pg.draw.circle(self.screen, (255, 255, 255), (closest_powerup.x - closest_powerup.image.width // 2 - (player.x - self.WIDTH // 2 + closest_powerup.image.width // 2), closest_powerup.y - closest_powerup.image.height // 2 - (player.y - self.HEIGHT // 2 + closest_powerup.image.height // 2)), 5)
+
                 player.set_close_powerups(close_powerups)
                 player.draw(self.screen, self.player)
 
-                closest_powerup_x = 0
-                closest_powerup_y = 0
-
-                if len(close_powerups) > 0:
-                    closest_powerup_x = player.x - close_powerups[0].x
-                    closest_powerup_y = player.y - close_powerups[0].y
-
-                closest_player_x = 0
-                closest_player_y = 0
-
+                closest_player = None
                 closest_dist = float('inf')
                 for other_player in self.players:
                     if other_player is player: continue
@@ -1097,25 +1131,40 @@ class ShapeRoyale:
                     player_dist = dist((other_player.x, other_player.y), (player.x, player.y))
                     if player_dist < closest_dist:
                         closest_dist = player_dist
-                        closest_player_x = player.x - other_player.x
-                        closest_player_y = player.y - other_player.y
+                        closest_player = other_player
 
-                if nets is not None:
-                    movement, shoot = self.choose_action(nets[i], player.hp, left_wall, right_wall, top_wall, bottom_wall, closest_powerup_x, closest_powerup_y, closest_player_x, closest_player_y, closest_bullet_x, closest_bullet_y, int(player.rotation == 270), int(player.rotation == 90), int(player.rotation == 0), int(player.rotation == 180))
+                if not player.is_player:
+                    left_wall += self.WIDTH / 2
+                    right_wall -= self.WIDTH / 2
+                    top_wall += self.WIDTH / 2
+                    bottom_wall += self.WIDTH / 2
 
-                    if movement == 0: player.move_left(dt)
-                    elif movement == 1: player.move_right(dt)
-                    elif movement == 2: player.move_up(dt)
-                    elif movement == 3: player.move_down(dt)
+                    #x_walls_dist = max(-1, min(1, (player.x - self.safezone.left_wall + self.WIDTH / 2) / (self.safezone.right_wall - self.safezone.left_wall + 0.00000000000000000001) * 2 - 1))
+                    #y_walls_dist = max(-1, min(1, (player.y - self.safezone.top_wall + self.HEIGHT / 2) / (self.safezone.bottom_wall - self.safezone.top_wall + 0.00000000000000000001) * 2 - 1))
 
-                    if shoot == 1: player.shoot()
+                    right_wall_dist = max(0, min(1, (player.x - self.safezone.left_wall + self.WIDTH / 2) / (self.safezone.right_wall - self.safezone.left_wall + 0.00000000000000000001)))
+                    left_wall_dist = 1 - right_wall_dist
+                    bottom_wall_dist = max(0, min(1, (player.y - self.safezone.top_wall + self.HEIGHT / 2) / (self.safezone.bottom_wall - self.safezone.top_wall + 0.00000000000000000001)))
+                    top_wall_dist = 1 - bottom_wall_dist
+
+                    #if i == self.spectator_index:
+                    #    print(round(top_wall_dist, 2), round(bottom_wall_dist, 6))
+
+                    danger = max(left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist)
+
+                    player.ai_move(dt, (left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist), closest_powerup, closest_player, closest_bullet)
 
                 if player.dead:
                     dead_players.append(player)
 
             for dead_player in dead_players:
-                if genomes is not None:
-                    genomes[dead_player.index][1].fitness -= 15
+                if dead_player == self.player:
+                    self.spectating = True
+
+                for rarity, powerup_info, on_pickup in dead_player.collected_powerups:
+                    new_powerup = Powerup(dead_player.x + randint(-50, 50), dead_player.y + randint(-50, 50), rarity, powerup_info, on_pickup)
+                    self.powerups.append(new_powerup)
+                    self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
 
                 self.players.remove(dead_player)
                 self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
