@@ -3,16 +3,16 @@ import os
 
 from sound import generate_sine_wave
 
+from shape import Player, Shape
+from powerups import Powerup
+from utils import AnimManager, FONTS_PATH
+
 from time import time
 from json import loads
-from math import dist, sin, cos, atan2, pi, sqrt, floor, ceil
-from ast import literal_eval
+from math import dist, sqrt, floor, ceil
 from random import randint, choice, uniform
-#from shapely import box, Polygon
 
 from typing import List, Sequence, Dict
-
-FONTS_PATH = "./UI/Fonts"
 
 startup_str = """
     ||
@@ -26,496 +26,6 @@ startup_str = """
 print(startup_str)
 
 pg.init()
-
-def obj_dist(obj1: object, obj2: object) -> float:
-    """Returns the distance between 2 objects with x and y position properties"""
-    return dist((obj1.x, obj1.y), (obj2.x, obj2.y))
-
-class Poison:
-    def __init__(self, parent: any, deal_damage_func: object, on_poison_end: object, damage: int, duration: int, lifesteal: float) -> None:
-        self.parent = parent
-        self.deal_damage_func = deal_damage_func
-        self.on_poison_end = on_poison_end
-
-        self.damage = damage
-        self.duration = duration
-        self.lifesteal = lifesteal
-
-        self.last_tick_time = time()
-
-    def update(self) -> None:
-        if time() - self.last_tick_time >= 1:
-            self.duration -= time() - self.last_tick_time
-            self.last_tick_time = time()
-
-            self.deal_damage_func(self.damage)
-            self.parent.give_lifesteal(self.damage * self.lifesteal)
-
-            if self.duration <= 0: self.on_poison_end(self)
-
-class Bullet:
-    def __init__(self, parent: any, x: float, y: float, velocity: List[float], base_damage: int, damage_growth: float,
-                 poison_damage: int, penetration: float, lifesteal: float, bullet_img: pg.Surface) -> None:
-
-        self.parent = parent
-        
-        self.start_x = x
-        self.start_y = y
-
-        self.x = x
-        self.y = y
-        self.velocity = velocity
-
-        self.base_damage = base_damage
-        self.damage_growth = damage_growth
-        self.poison_damage = poison_damage
-        self.penetration = penetration
-        self.lifesteal = lifesteal
-
-        self.image = bullet_img
-
-    @property
-    def distance_travelled(self) -> float:
-        return dist((self.x, self.y), (self.start_x, self.start_y))
-
-    @property
-    def rect(self) -> pg.Rect:
-        return pg.Rect(self.x - self.image.width // 2, self.y - self.image.height // 2, self.image.width, self.image.height)
-
-    def move(self, dt: float) -> None:
-        self.x += self.velocity[0] * dt
-        self.y += self.velocity[1] * dt
-
-    def draw(self, screen: pg.Surface, draw_parent: any) -> None:
-        screen_rect = pg.Rect(draw_parent.x - screen.width // 2 + self.image.width // 2, draw_parent.y - screen.height // 2 + self.image.height // 2, screen.width, screen.height)
-
-        if not pg.Rect(self.x - self.image.width // 2, self.y - self.image.height // 2, self.image.width, self.image.height).colliderect(screen_rect): return
-
-        screen.blit(self.image, (self.x - self.image.width // 2 - screen_rect.x, self.y - self.image.height // 2 - screen_rect.y))
-
-    def hit(self, target: any) -> None:
-        if self.damage_growth == 1.0: # Default
-            # No bullet growth
-            health_damage = self.base_damage
-        else:
-            health_damage = self.base_damage * (self.damage_growth * self.distance_travelled / 400.0)
-
-        shield_damage = health_damage * self.penetration
-
-        target.take_damage(health_damage)
-        target.take_shield_damage(shield_damage)
-
-        if self.poison_damage > 0:
-            target.add_poison(self.parent, self.poison_damage, (self.lifesteal - 1))
-
-        self.parent.give_lifesteal(health_damage * (self.lifesteal - 1))
-
-class Powerup:
-    WIDTH = 50
-    HEIGHT = 50
-
-    def __init__(self, x: int, y: int, rarity: str, powerup_info: Dict[str, Dict], on_pickup: object) -> None:
-        self.x = x
-        self.y = y
-
-        self.rarity = rarity
-        self.name = choice(list(powerup_info[rarity]["types"]))
-        self.powerup_info = powerup_info
-        self.info = self.powerup_info[rarity]["types"][self.name]
-
-        self.on_pickup = on_pickup
-
-        self.color = literal_eval(self.powerup_info[rarity]["color"])
-
-        self.blurb = self.info["blurb"]
-        self.description = self.info["description"]
-        self.effect = self.info["effect"]
-        self.value = self.info["value"]
-
-        self.image = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
-        pg.draw.aacircle(self.image, self.color, (self.WIDTH // 2, self.HEIGHT // 2), self.WIDTH // 2)
-
-    def render_popup(self) -> pg.Surface:
-        title_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", size=40)
-        blurb_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", size=25)
-        description_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", size=20)
-
-        rect_w, rect_h = 700, 400
-        surface = pg.Surface((rect_w, rect_h), pg.SRCALPHA)
-
-        pg.draw.rect(surface, self.color, (0, 0, rect_w, rect_h), border_radius=20)
-
-        curr_y = 20
-        title_lbl = title_font.render(self.name, True, (255, 255, 255), wraplength=rect_w - 20)
-        surface.blit(title_lbl, (rect_w // 2 - title_lbl.width // 2, curr_y))
-        curr_y += title_lbl.height + 20
-
-        blurb_lbl = blurb_font.render(f'"{self.blurb}"', True, (255, 255, 255), wraplength=rect_w - 20)
-        surface.blit(blurb_lbl, (rect_w // 2 - blurb_lbl.width // 2, curr_y))
-        curr_y += blurb_lbl.height
-
-        description_lbl = description_font.render(self.description, True, (255, 255, 255), wraplength=rect_w - 20)
-        rarity_lbl = blurb_font.render(self.rarity, True, (255, 255, 255))
-
-        rarity_y = rect_h - rarity_lbl.height - 20
-        surface.blit(rarity_lbl, (rect_w // 2 - rarity_lbl.width // 2, rarity_y))
-
-        description_y = curr_y + (rarity_y - curr_y) // 2 - description_lbl.height // 2
-        surface.blit(description_lbl, (rect_w // 2 - description_lbl.width // 2, description_y))
-
-        return surface
-
-    def draw(self, screen: pg.Surface, draw_parent: any) -> None:
-        screen_rect = pg.Rect(draw_parent.x - screen.width // 2 + self.image.width // 2, draw_parent.y - screen.height // 2 + self.image.height // 2, screen.width, screen.height)
-
-        if not pg.Rect(self.x - self.image.width // 2, self.y - self.image.height // 2, self.image.width, self.image.height).colliderect(screen_rect): return
-
-        screen.blit(self.image, (self.x - self.image.width // 2 - screen_rect.x, self.y - self.image.height // 2 - screen_rect.y))
-
-    def pickup(self, player: any) -> None:
-        player.parse_effect(self.effect, self.value)
-        player.collected_powerups.append((self.rarity, self.powerup_info, self.on_pickup))
-        player.show_powerup_popup(self.render_popup())
-
-        self.on_pickup(self)
-
-class Shape:
-    POISON_DURATION = 10
-
-    MAX_ABILITY_SETTINGS = {
-        "max_hp": float('inf'),
-        "max_shield": float('inf'),
-        "max_speed": 80.0,
-        "damage": float('inf'),
-        "firerate": float('inf'),
-        "bullet_speed": 10.0,
-        "penetration": float('inf'),
-        "shield_regen_rate": float('inf'),
-        "lifesteal": float('inf'),
-        "poison_damage": float('inf'),
-        "zone_resistance": 0.9,
-        "health_regen_rate": float('inf'),
-        "damage_growth": float('inf')
-    }
-
-    def __init__(self, map_size: int, x: float, y: float, index: int, shape_name: str, shape_info: Dict[str, Dict], shape_image: pg.Surface, enemy_shape_image: pg.Surface, bullets: List[Bullet],
-                 bullet_img: pg.Surface, is_player: bool, squad: List[any] = []) -> None:
-
-        self.map_size = map_size
-
-        self.x = x
-        self.y = y
-        self.index = index
-        self.rotation = 0
-
-        self.shape_name = shape_name
-        self.shape_info = shape_info
-        self.info = self.shape_info[self.shape_name]
-
-        self.shape_image = shape_image
-        self.enemy_shape_image = enemy_shape_image
-        self.rotated_shape_image = shape_image.copy()
-        self.rotated_enemy_shape_image = enemy_shape_image.copy()
-
-        self.bullet_img = bullet_img
-
-        self.is_player = is_player
-        self.squad = squad
-
-        self.dead = False
-
-        self.max_hp = self.info['hp'] # literal
-        self.max_shield = self.info['shield'] # literal
-        self.max_speed = self.info['speed'] # literal
-        self.damage = self.info['damage'] # literal
-        self.firerate = self.info['firerate'] # literal 
-        self.bullet_speed = self.info['bullet_speed'] # literal
-        self.penetration = self.info['penetration'] # percent
-        self.shield_regen_rate = self.info['shield_regen'] # literal
-        self.lifesteal = 1.0 # percent
-        self.poison_damage = 0 # literal
-        self.zone_resistance = 1.0 # percent
-        self.health_regen_rate = self.info["health_regen"] # literal
-        self.damage_growth = 1.0 # percent
-
-        self.hp = self.max_hp
-        self.shield = self.max_shield
-
-        self.last_shoot_time = 0
-
-        self.bullets = bullets
-        self.poisons = []
-        self.collected_powerups = []
-
-        self.showing_powerup_popup = False
-        self.powerup_popup = None
-
-        self.rect = pg.Rect(0, 0, self.shape_image.width, self.shape_image.height)
-
-        self.close_powerups = []
-        self.target = (randint(0, self.map_size), randint(0, self.map_size))
-
-        self.info_surf = pg.Surface((100, 40), pg.SRCALPHA)
-
-        self.num_inputs = 0
-        self.prioritises_x = bool(randint(0, 1))
-
-    @property
-    def global_rect(self) -> pg.Rect: return pg.Rect(self.x - self.rotated_shape_image.width * 0.5, self.y - self.rotated_shape_image.height * 0.5, self.rotated_shape_image.width, self.rotated_shape_image.height)
-
-    def change_var_value(self, var_name: str, value_type: str, value: any) -> None:
-        var = getattr(self, var_name)
-        if value_type == 'percentage_increase':
-            var *= value
-
-        elif value_type == 'increase':
-            var += value
-
-        value = min(var, self.MAX_ABILITY_SETTINGS[var_name])
-
-        setattr(self, var_name, value)
-
-    def parse_effect(self, effect: str, value: any) -> None:
-        """Target.Effect.Valuetype, value"""
-
-        args = effect.split('.')
-
-        if len(args) < 3:
-            raise Exception("Provided args is not valid! 'arg1.arg2.arg3' is required!")
-
-        if args[0] == 'player':
-            var = None
-
-            match args[1]:
-                case 'maxhp': var = "max_hp"
-                case 'shield': var = "max_shield"
-                case 'speed': var = "max_speed"
-                case 'damage': var = "damage"
-                case 'firerate': var = "firerate"
-                case 'bulletspeed': var = "bullet_speed"
-                case 'penetration': var = "penetration"
-                case 'shieldregenrate': var = "shield_regen_rate"
-                case 'lifesteal': var = "lifesteal"
-                case 'poisondamage': var = "poison_damage"
-                case 'zoneresistance': var = "zone_resistance"
-                case 'healthregenrate': var = "health_regen_rate"
-                case 'damagegrowth': var = "damage_growth"
-
-            self.change_var_value(var, args[2], value)
-
-    def show_powerup_popup(self, powerup_popup: pg.Surface) -> None:
-        self.powerup_popup = powerup_popup
-        self.showing_powerup_popup = True
-
-    def set_close_powerups(self, close_powerups: List[Powerup]) -> None:
-        self.close_powerups = close_powerups
-
-    def die(self) -> None:
-        #print("Your dead now, if you didn't know.")
-        self.dead = True
-
-    def take_damage(self, damage: float) -> None:
-        self.hp -= damage
-
-        if self.hp <= 0:
-            self.die()
-
-    def take_shield_damage(self, shield_damage: float) -> None:
-        leftover_shield_damage = shield_damage - self.shield
-
-        if leftover_shield_damage > 0:
-            self.take_damage(leftover_shield_damage)
-            self.shield = 0
-        else:
-            self.shield -= shield_damage
-
-    def on_poison_end(self, poison: Poison) -> None:
-        self.poisons.remove(poison)
-
-    def add_poison(self, parent: any, poison_damage: int, poison_lifesteal: float) -> None:
-        self.poisons.append(Poison(parent, self.take_damage, self.on_poison_end, poison_damage, self.POISON_DURATION, poison_lifesteal))
-
-    def give_lifesteal(self, lifesteal_health: float) -> None:
-        self.give_hp(lifesteal_health)
-
-    def give_hp(self, hp: int) -> None:
-        self.hp = min(self.max_hp, self.hp + hp)
-
-    def give_shield_hp(self, hp: int) -> None:
-        self.shield = min(self.max_shield, self.shield + hp)
-
-    def move_up(self, dt: float) -> None:
-        self.y -= self.max_speed * dt * 30
-        self.rotation = 0
-
-    def move_right(self, dt: float) -> None:
-        self.x += self.max_speed * dt * 30
-        self.rotation = 270
-
-    def move_down(self, dt: float) -> None:
-        self.y += self.max_speed * dt * 30
-        self.rotation = 180
-
-    def move_left(self, dt: float) -> None:
-        self.x -= self.max_speed * dt * 30
-        self.rotation = 90
-
-    def move_to(self, x: float, y: float, dt: float) -> None:
-        rx, ry = x - self.x, y - self.y
-
-        abs_x = abs(rx)
-        abs_y = abs(ry)
-
-        def position_x() -> bool:
-            """Returns if it took an action"""
-            if abs_x > 20:
-                if rx < 0: self.move_left(dt)
-                else: self.move_right(dt)
-
-                return True
-            return False
-
-        def position_y() -> bool:
-            if abs_y > 20:
-                if ry < 0: self.move_up(dt)
-                else: self.move_down(dt)
-
-                return True
-            return False
-
-        action_taken = False
-        if self.prioritises_x:
-            action_taken = action_taken or position_x()
-            if not action_taken:
-                position_y()
-        else:
-            action_taken = action_taken or position_y()
-            if not action_taken:
-                position_x()
-
-    def shoot(self) -> None:
-        if time() - self.last_shoot_time >= 1 / self.firerate:
-            self.last_shoot_time = time()
-
-            match self.rotation:
-                case 0: bullet_vel = [0, -self.max_speed * (self.bullet_speed + 1) / 2.5]
-                case 90: bullet_vel = [-self.max_speed * (self.bullet_speed + 1) / 2.5, 0]
-                case 180: bullet_vel = [0, self.max_speed * (self.bullet_speed + 1) / 2.5]
-                case 270: bullet_vel = [self.max_speed * (self.bullet_speed + 1) / 2.5, 0]
-
-            self.bullets.append(Bullet(self, self.x, self.y, bullet_vel, self.damage, self.damage_growth, self.poison_damage, self.penetration, self.lifesteal, self.bullet_img))
-
-    def fight_player(self, dt: float, closest_player: Player) -> None:
-        dx = closest_player.x - self.x
-        dy = closest_player.y - self.y
-
-        def position_x() -> bool:
-            """Returns if it took an action"""
-            if abs(dx) < 40:
-                # We are inline with the enemy but we just need to face them and then shoot them
-                if dy < 0:
-                    self.move_down(dt)
-                    self.move_up(dt)
-                else:
-                    self.move_up(dt)
-                    self.move_down(dt)
-                self.shoot()
-                return True
-            return False
-
-        def position_y() -> bool:
-            """Returns if it took an action"""
-            if abs(dy) < 40:
-                # We are inline with the enemy but we just need to face them and then shoot them
-                if dx < 0:
-                    self.move_right(dt)
-                    self.move_left(dt)
-                else:
-                    self.move_left(dt)
-                    self.move_right(dt)
-                self.shoot()
-                return True
-            return False
-
-        action_taken = False
-        if self.prioritises_x:
-            action_taken = action_taken or position_x()
-            if not action_taken:
-                position_y()
-        else:
-            action_taken = action_taken or position_y()
-            if not action_taken:
-                position_x()
-        
-        if not action_taken:
-            self.move_to(closest_player.x, closest_player.y, dt)
-
-    def ai_move(self, dt: float, wall_distances: tuple[float], closest_powerup: Powerup | None, closest_player: Player | None, closest_bullet: Bullet | None) -> None:
-        if closest_powerup is not None:
-            powerup_dist = obj_dist(closest_powerup, self)
-        if closest_player is not None:
-            player_dist = obj_dist(closest_player, self)
-        if closest_bullet is not None:
-            bullet_dist = obj_dist(closest_bullet, self)
-
-        for i, wall_distance in enumerate(wall_distances):
-            if abs(wall_distance) > 0.005: continue
-
-            match i:
-                case 0: self.move_left(dt)
-                case 1: self.move_right(dt)
-                case 2: self.move_up(dt)
-                case 3: self.move_down(dt)
-
-            self.target = (randint(0, self.map_size), randint(0, self.map_size))
-            return
-
-        if player_dist < 1000:
-            self.fight_player(dt, closest_player)
-        elif closest_powerup is not None:
-            self.move_to(closest_powerup.x, closest_powerup.y, dt)
-        else:
-            self.move_to(self.target[0], self.target[1], dt)
-
-            if dist((self.x, self.y), self.target) < 40:
-                self.target = (randint(0, self.map_size), randint(0, self.map_size))
-
-    def render_info_surf(self) -> None:
-        self.info_surf.fill((90, 90, 90))
-
-        hp_percent = self.hp / self.max_hp
-        shield_percent = self.shield / self.max_shield
-
-        pg.draw.rect(self.info_surf, (0, 255, 0), (0, 0, self.info_surf.width * hp_percent, self.info_surf.height // 2))
-        pg.draw.rect(self.info_surf, (0, 0, 255), (0, self.info_surf.height // 2, self.info_surf.width * shield_percent, self.info_surf.height // 2))
-
-    def update(self, dt: float) -> None:
-        for poison in self.poisons:
-            poison.update()
-
-        self.give_hp(self.health_regen_rate * dt)
-        self.give_shield_hp(self.shield_regen_rate * dt)
-
-        self.rotated_shape_image = pg.transform.rotate(self.shape_image, self.rotation)
-        self.rotated_enemy_shape_image = pg.transform.rotate(self.enemy_shape_image, self.rotation)
-
-        self.render_info_surf()
-
-    def draw(self, screen: pg.Surface, draw_parent: any) -> None:
-        if draw_parent in self.squad:
-            image = self.rotated_shape_image
-        else:
-            image = self.rotated_enemy_shape_image
-
-        screen_rect = pg.Rect(draw_parent.x - screen.width // 2 + image.width // 2, draw_parent.y - screen.height // 2 + image.height // 2, screen.width, screen.height)
-
-        if not pg.Rect(self.x, self.y, image.width, image.height).colliderect(screen_rect): return
-
-        screen.blit(image, (self.x - screen_rect.x, self.y - screen_rect.y))
-        screen.blit(self.info_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30))
-
-        if self.showing_powerup_popup and draw_parent is self and self.is_player:
-            screen.blit(self.powerup_popup, (screen.width // 2 - self.powerup_popup.width // 2, screen.height // 2 - self.powerup_popup.height // 2))
 
 class Screen(pg.Surface):
     def __init__(self, rect: pg.Rect, flags: int = 0) -> None:
@@ -532,79 +42,12 @@ class Screen(pg.Surface):
     @property
     def pos(self) -> Sequence[int]: return (self.positioning_rect.x, self.positioning_rect.y)
 
-class Player:
-    def __init__(self) -> None:
-        self.ready = False
-        self.shape_index = 0
-
-    @property
-    def ready_text(self) -> str:
-        if self.ready: return "Ready"
-        else: return "Not ready"
-
-    @property
-    def ready_color(self) -> str:
-        if self.ready: return pg.Color(0, 255, 0)
-        else: return pg.Color(255, 0, 0)
-
-class Anim:
-    def __init__(self, obj: object, property: str, target: float, step: float, max_finish_dist: float) -> None:
-        self.object = obj
-        self.property = property
-        self.target = target
-        self.step = step
-        self.max_finish_dist = max_finish_dist
-
-        self.finished = False
-
-        if not hasattr(self.object, self.property):
-            raise Exception(f"Error while creating animation for {self.object}: {self.object} has no property \"{self.property}\"!")
-
-    @property
-    def gprop(self) -> float:
-        return getattr(self.object, self.property)
-    
-    def sprop(self, value: float) -> None:
-        setattr(self.object, self.property, value)
-
-    def update(self, dt: float) -> bool:
-        if abs(self.target - self.gprop) < max(self.step * dt, self.max_finish_dist):
-            self.sprop(self.target)
-            self.finished = True
-            return True
-        
-        self.sprop(self.gprop + self.step * dt)
-        return False
-
-class AnimManager:
-    def __init__(self) -> None:
-        if not hasattr(self.__class__, "anims"):
-            self.__class__.anims = []
-
-    def new(self, obj: object, property: str, target: float, step: float, max_finish_dist: float = 0.5) -> Anim:
-        anim = Anim(obj, property, target, step, max_finish_dist)
-        self.anims.append(anim)
-
-        return anim
-
-    def update(self, dt: float) -> None:
-        complete_anims = []
-
-        for anim in self.anims:
-            done = anim.update(dt)
-
-            if done:
-                complete_anims.append(anim)
-
-        for anim in complete_anims:
-            self.anims.remove(anim)
-
 class Safezone:
     NUM_POINTS = 100
     DISTANCE_TO_MOVE_REDUCTION = 1000
     TARGET_RADIUS_ALLOWANCE = 1.05
     SCALING = 80
-    SPEED = 10
+    SPEED = 50
 
     def __init__(self, screen_width: int, screen_height: int, map_size_x: int, map_size_y: int, phase_config: Dict[int, Dict]) -> None:
         self.screen_width = screen_width
@@ -650,8 +93,11 @@ class Safezone:
     def update(self, dt: float) -> None:
         self.dt = dt
 
+        self.SPEED += 1 * dt
+
         for anim in self.anims:
             if not anim.finished:
+                anim.step += 1 * dt
                 return
 
         self.next_phase()
@@ -852,8 +298,8 @@ class ShapeRoyale:
 
     NUM_PHASES = 4
     NUM_PLAYERS = 100
-    NUM_POWERUPS = 24 * 15 # this must be divisible by the NUM_POWERUP_SECTIONS below
     NUM_POWERUP_SECTIONS = 24 
+    NUM_POWERUPS = NUM_POWERUP_SECTIONS * 20 # this must be divisible by the NUM_POWERUP_SECTIONS
     POWERUP_SECTION_SIZE = MAP_SIZE / NUM_POWERUP_SECTIONS
 
     MAX_BULLET_TRAVEL_DIST = 2000
@@ -1007,7 +453,7 @@ class ShapeRoyale:
 
                 return
 
-            dt = (self.clock.tick(999) / 1000.0) * dt_mut
+            dt = (self.clock.tick(60) / 1000.0) * dt_mut
             dt_mut = 1
             dt_sum += dt
 

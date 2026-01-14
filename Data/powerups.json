@@ -5,21 +5,21 @@
         "types": {
             "Health Pack": {
                 "blurb": "Some would say there's no such thing as a free lunch... well here it is!",
-                "description": "Increases max player health by 10%",
-                "effect": "player.maxhp.percentage_increase",
-                "value": 1.1
+                "description": "Increases max player health by 10hp",
+                "effect": "player.maxhp.increase",
+                "value": 10
             },
             "Tank": {
                 "blurb": "Sticks and stones may NOT break my bones!",
-                "description": "Increases max player shield by 10%",
-                "effect": "player.shield.percentage_increase",
-                "value": 1.1
+                "description": "Increases max player shield by 10hp",
+                "effect": "player.shield.increase",
+                "value": 10
             },
             "Speed": {
                 "blurb": "I'm no tortoise!",
-                "description": "Increases max player speed by 10%",
-                "effect": "player.speed.percentage_increase",
-                "value": 1.1
+                "description": "Increases max player speed by 1u/s",
+                "effect": "player.speed.increase",
+                "value": 1
             },
             "Solar Panel": {
                 "blurb": "Don't give this to vampires...",
@@ -41,27 +41,27 @@
         "types": {
             "Sniper": {
                 "blurb": "Why have health when you can have POWER! (Or both, that works too)",
-                "description": "Increases bullet damage by 20%",
-                "effect": "player.damage.percentage_increase",
-                "value": 1.2
+                "description": "Increases bullet damage by 1hp",
+                "effect": "player.damage.increase",
+                "value": 1
             },
             "Machine Gun": {
                 "blurb": "BRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR!",
-                "description": "Increases rate of fire by 10%",
-                "effect": "player.firerate.percentage_increase",
-                "value": 1.1
+                "description": "Increases rate of fire by 0.1 bps",
+                "effect": "player.firerate.increase",
+                "value": 0.1
             },
             "Particle Accelerator": {
                 "blurb": "'Did ya see that?' 'Nah wha'?' 'Must've been the wind...'",
-                "description": "Increases bullet speed by 10%",
-                "effect": "player.bulletspeed.percentage_increase",
-                "value": 1.1
+                "description": "Increases bullet speed by 1u/s",
+                "effect": "player.bulletspeed.increase",
+                "value": 1
             },
             "Kitchen Knife": {
                 "blurb": "Not much more to say about Mum's favorite kitchen knife souring through the air at 463.78km/h.",
-                "description": "Increases bullet penetration by 20%",
+                "description": "Increases bullet penetration by 10%",
                 "effect": "player.penetration.percentage_increase",
-                "value": 1.2
+                "value": 1.1
             }
         }
     },
@@ -77,9 +77,9 @@
             },
             "Shotgun": {
                 "blurb": "Boy, you best get off my land before I make you!",
-                "description": "Increases rate of fire by 30%",
-                "effect": "player.firerate.percentage_increase",
-                "value": 1.3
+                "description": "Increases rate of fire by 0.3bps",
+                "effect": "player.firerate.increase",
+                "value": 0.3
             },
             "Toxic Waste": {
                 "blurb": "Time to dispose of the chemicals!",
