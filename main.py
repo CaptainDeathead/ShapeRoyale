@@ -12,6 +12,7 @@ from json import loads
 from math import dist, sqrt, floor, ceil
 from random import randint, choice, uniform
 
+from copy import deepcopy
 from typing import List, Sequence, Dict
 
 startup_str = """
@@ -85,19 +86,20 @@ class Safezone:
         self.target_radius = self.phase_config[self.phase_index]["radius"]
         self.zone_speed = self.SPEED
 
-        self.anims.append(AnimManager().new(self, "left_wall", self.target[0] - self.target_radius, self.zone_speed))
-        self.anims.append(AnimManager().new(self, "right_wall", self.target[0] + self.target_radius, -self.zone_speed))
-        self.anims.append(AnimManager().new(self, "top_wall", self.target[1] - self.target_radius, self.zone_speed))
-        self.anims.append(AnimManager().new(self, "bottom_wall", self.target[1] + self.target_radius, -self.zone_speed))
+        #self.anims.append(AnimManager().new(self, "left_wall", self.target[0] - self.target_radius, self.zone_speed))
+        #self.anims.append(AnimManager().new(self, "right_wall", self.target[0] + self.target_radius, -self.zone_speed))
+        #self.anims.append(AnimManager().new(self, "top_wall", self.target[1] - self.target_radius, self.zone_speed))
+        #self.anims.append(AnimManager().new(self, "bottom_wall", self.target[1] + self.target_radius, -self.zone_speed))
+        self.anims.append(AnimManager().new(self, "left_wall", self.right_wall, self.zone_speed))
+        self.anims.append(AnimManager().new(self, "right_wall", self.left_wall, -self.zone_speed))
+        self.anims.append(AnimManager().new(self, "top_wall", self.bottom_wall, self.zone_speed))
+        self.anims.append(AnimManager().new(self, "bottom_wall", self.top_wall, -self.zone_speed))
 
     def update(self, dt: float) -> None:
         self.dt = dt
 
-        self.SPEED += 1 * dt
-
         for anim in self.anims:
             if not anim.finished:
-                anim.step += 1 * dt
                 return
 
         self.next_phase()
@@ -170,14 +172,6 @@ class MainMenu:
         with open("../ShapeRoyale/Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
 
-        #self.players[0].controller.plugged_in = True
-        #self.players[1].controller.plugged_in = True
-        #self.players[1].ready = True
-        #self.players[2].controller.plugged_in = True
-        #self.players[2].ready = True
-        #self.players[3].controller.plugged_in = True
-        #self.players[3].ready = True
-
         self.main()
 
     def reset_timer(self) -> None:
@@ -201,7 +195,7 @@ class MainMenu:
         card_h = 500
         pad_w = 50
 
-        cards_w = card_w * 4 + pad_w * 3
+        cards_w = card_w * 3 + pad_w * 2
         start_x = self.width // 2 - cards_w // 2
 
         card_y = 350
@@ -235,18 +229,26 @@ class MainMenu:
         curr_y += shape_image.height + 20
 
         shape_hp = self.shape_info[selected_shape]["hp"]
+        shape_hp_regen = self.shape_info[selected_shape]["health_regen"]
+        shape_shield = self.shape_info[selected_shape]["shield"]
+        shape_shield_regen = self.shape_info[selected_shape]["shield_regen"]
         shape_firerate = self.shape_info[selected_shape]["firerate"]
         shape_dmg = self.shape_info[selected_shape]["damage"]
         shape_speed = self.shape_info[selected_shape]["speed"]
+        shape_penetration = self.shape_info[selected_shape]["penetration"] * 100 - 100
 
         shape_info_lbls = [
             self.fonts["small"].render(f"Health: {shape_hp}HP", True, (255, 255, 255)),
+            self.fonts["small"].render(f"Health regen: {shape_hp_regen}HP/s", True, (255, 255, 255)),
+            self.fonts["small"].render(f"Shield: {shape_shield}HP", True, (255, 255, 255)),
+            self.fonts["small"].render(f"Shield regen: {shape_shield_regen}HP/s", True, (255, 255, 255)),
             self.fonts["small"].render(f"Rate of fire: {shape_firerate}/s", True, (255, 255, 255)),
             self.fonts["small"].render(f"Damage: {shape_dmg}HP", True, (255, 255, 255)),
             self.fonts["small"].render(f"Speed: {shape_speed}u/s", True, (255, 255, 255)),
+            self.fonts["small"].render(f"Penetration: {shape_penetration:.1f}%", True, (255, 255, 255)),
         ]
 
-        largest_width = shape_info_lbls[1].width
+        largest_width = shape_info_lbls[3].width
 
         for shape_info_lbl in shape_info_lbls:
             self.display_surf.blit(shape_info_lbl, (x + card_w // 2 - largest_width // 2, curr_y))
@@ -261,6 +263,14 @@ class MainMenu:
                 if event.type == pg.KEYDOWN:
                     if event.key == pg.K_RETURN:
                         self.player.ready = not self.player.ready
+                    elif event.key == pg.K_LEFT:
+                        self.player.shape_index -= 1
+                        if self.player.shape_index < 0:
+                            self.player.shape_index = 2
+                    elif event.key == pg.K_RIGHT:
+                        self.player.shape_index += 1
+                        if self.player.shape_index > 2:
+                            self.player.shape_index = 0
 
             self.draw_player_cards()
 
@@ -315,7 +325,7 @@ class ShapeRoyale:
 
         self.anim_manager = AnimManager()
 
-        #self.main_menu = MainMenu(self.screen)
+        self.main_menu = MainMenu(self.screen)
 
         self.clock = pg.time.Clock()
 
@@ -351,11 +361,14 @@ class ShapeRoyale:
         self.powerup_sections = [(i*self.POWERUP_SECTION_SIZE, (i+1)*self.POWERUP_SECTION_SIZE) for i in range(self.NUM_POWERUP_SECTIONS)]
         self.powerup_section_index = 0
 
-        self.fps_font = pg.font.SysFont(f"{FONTS_PATH}/PressStart2P.ttf", 30)
+        self.fps_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 15)
+        self.spectating_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("You are spectating!", True, (255, 255, 255))
 
         self.spectator_index = 0
         self.spectating = False
         self.player.is_player = not self.spectating
+
+        self.minimap_surf = pg.Surface((200, 200), pg.SRCALPHA)
 
         self.main()
     
@@ -395,10 +408,9 @@ class ShapeRoyale:
     def generate_players(self) -> List[Shape]:
         shapes = []
 
-        #name = self.shape_names[self.main_menu.player.shape_index]
-        name = choice(self.shape_names) 
+        name = self.shape_names[self.main_menu.player.shape_index]
         new_shape = Shape(
-            self.MAP_SIZE, randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), 0, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
+            self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), self.main_menu.player.shape_index, name, self.shape_info, self.shape_images[f"{name}Friendly"],
             self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, True, []
         )
         new_shape.squad.append(new_shape)
@@ -407,7 +419,7 @@ class ShapeRoyale:
         for i in range(self.NUM_PLAYERS - 1):
             name = choice(self.shape_names)
             new_shape = Shape(
-                self.MAP_SIZE, randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), i+1, choice(self.shape_names), self.shape_info, self.shape_images[f"{name}Friendly"],
+                self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), i+1, name, self.shape_info, self.shape_images[f"{name}Friendly"],
                 self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, is_player=False, squad=[]
             )
             new_shape.squad.append(new_shape)
@@ -433,7 +445,7 @@ class ShapeRoyale:
 
             powerup = Powerup(randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), rarity, self.powerup_info, self.on_powerup_pickup)
             powerups.append(powerup)
-            self.powerup_grid[floor(powerup.y // self.POWERUP_SECTION_SIZE)][floor(powerup.x // self.POWERUP_SECTION_SIZE)].append(powerup)
+            self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].append(powerup)
 
         return powerups
 
@@ -493,8 +505,11 @@ class ShapeRoyale:
                     if self.player.showing_powerup_popup:
                         self.player.showing_powerup_popup = False
 
+            self.minimap_surf.fill((0, 0, 0))
+
             for powerup in self.powerups:
                 powerup.draw(self.screen, self.player)
+                self.minimap_surf.set_at((powerup.x / self.MAP_SIZE * 200, powerup.y / self.MAP_SIZE * 200), (255, 255, 255))
 
             dead_players = []
 
@@ -613,13 +628,28 @@ class ShapeRoyale:
                     self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
 
                 self.players.remove(dead_player)
-                self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
+                
+                if self.spectating and dead_player.index < self.player.index:
+                    self.spectator_index -= 1
+
+            pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, 0, (self.safezone.left_wall - self.WIDTH / 2) / self.MAP_SIZE * 200, 200))
+            pg.draw.rect(self.minimap_surf, (255, 0, 0), ((self.safezone.right_wall) / self.MAP_SIZE * 200, 0, 200, 200))
+            pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, 0, 200, (self.safezone.top_wall - self.HEIGHT / 2) / self.MAP_SIZE * 200))
+            pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, (self.safezone.bottom_wall + self.HEIGHT / 2) / self.MAP_SIZE * 200, 200, 200))
+
+            pg.draw.rect(self.minimap_surf, (0, 0, 255), (self.player.x / self.MAP_SIZE * 200 - 1, self.player.y / self.MAP_SIZE * 200 - 1, 2, 2))
+            self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
+
+            if self.spectating:
+                self.screen.blit(self.spectating_lbl, (self.WIDTH / 2 - self.spectating_lbl.width / 2, 50))
 
             self.screen.blit(self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255)), (20, 20))
             self.screen.blit(self.fps_font.render(f"{self.spectator_index+1}/{len(self.players)}", True, (255, 255, 255)), (20, 40))
 
             self.powerup_section_index += 1
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0
+
+            self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
 
             pg.display.flip()
 

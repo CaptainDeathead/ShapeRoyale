@@ -32,6 +32,16 @@ class Bullet:
     def rect(self) -> pg.Rect:
         return pg.Rect(self.x - self.image.width // 2, self.y - self.image.height // 2, self.image.width, self.image.height)
 
+    @property
+    def health_damage(self) -> float:
+        if self.damage_growth == 1.0: # Default
+            # No bullet growth
+            health_damage = self.base_damage
+        else:
+            health_damage = self.base_damage * (self.damage_growth * self.distance_travelled / 400.0)
+
+        return health_damage
+
     def move(self, dt: float) -> None:
         self.x += self.velocity[0] * dt * 10
         self.y += self.velocity[1] * dt * 10
@@ -41,15 +51,11 @@ class Bullet:
 
         if not pg.Rect(self.x - self.image.width // 2, self.y - self.image.height // 2, self.image.width, self.image.height).colliderect(screen_rect): return
 
-        screen.blit(self.image, (self.x - self.image.width // 2 - screen_rect.x, self.y - self.image.height // 2 - screen_rect.y))
+        #screen.blit(self.image, (self.x - self.image.width // 2 - screen_rect.x, self.y - self.image.height // 2 - screen_rect.y))
+        pg.draw.circle(screen, (255, 255, 0), (self.x - screen_rect.x, self.y - screen_rect.y), self.health_damage / 1.75)
 
     def hit(self, target: any) -> None:
-        if self.damage_growth == 1.0: # Default
-            # No bullet growth
-            health_damage = self.base_damage
-        else:
-            health_damage = self.base_damage * (self.damage_growth * self.distance_travelled / 400.0)
-
+        health_damage = self.health_damage
         shield_damage = health_damage * self.penetration
 
         target.take_damage(health_damage)

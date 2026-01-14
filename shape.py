@@ -3,7 +3,7 @@ import pygame as pg
 from bullet import Bullet
 from powerups import Powerup, Poison
 
-from utils import obj_dist
+from utils import FONTS_PATH, obj_dist
 
 from math import dist
 from random import randint
@@ -101,6 +101,8 @@ class Shape:
         self.close_powerups = []
         self.target = (randint(0, self.map_size), randint(0, self.map_size))
 
+        self.name_font = pg.Font(f"{FONTS_PATH}/PressStart2P.ttf", 16)
+        self.name_surf = self.name_font.render(f"{self.shape_name}", True, (255, 255, 255), 15)
         self.info_surf = pg.Surface((100, 40), pg.SRCALPHA)
 
         self.num_inputs = 0
@@ -359,6 +361,7 @@ class Shape:
 
         screen.blit(image, (self.x - screen_rect.x, self.y - screen_rect.y))
         screen.blit(self.info_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30))
+        screen.blit(self.name_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 60))
 
         if self.showing_powerup_popup and draw_parent is self and self.is_player:
             screen.blit(self.powerup_popup, (screen.width // 2 - self.powerup_popup.width // 2, screen.height // 2 - self.powerup_popup.height // 2))
