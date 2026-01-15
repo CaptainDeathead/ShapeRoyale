@@ -34,11 +34,11 @@ class Bullet:
 
     @property
     def health_damage(self) -> float:
-        if self.damage_growth == 1.0: # Default
+        if self.damage_growth == 0: # Default
             # No bullet growth
             health_damage = self.base_damage
         else:
-            health_damage = self.base_damage * (self.damage_growth * self.distance_travelled / 400.0)
+            health_damage = self.base_damage * (self.damage_growth * self.distance_travelled / 1500.0 + 1)
 
         return health_damage
 
@@ -54,7 +54,7 @@ class Bullet:
         #screen.blit(self.image, (self.x - self.image.width // 2 - screen_rect.x, self.y - self.image.height // 2 - screen_rect.y))
         pg.draw.circle(screen, (255, 255, 0), (self.x - screen_rect.x, self.y - screen_rect.y), self.health_damage / 1.75)
 
-    def hit(self, target: any) -> None:
+    def hit(self, target: any) -> float:
         health_damage = self.health_damage
         shield_damage = health_damage * self.penetration
 
@@ -65,3 +65,5 @@ class Bullet:
             target.add_poison(self.parent, self.poison_damage, (self.lifesteal - 1))
 
         self.parent.give_lifesteal(health_damage * (self.lifesteal - 1))
+
+        return health_damage + shield_damage + self.poison_damage * target.POISON_DURATION

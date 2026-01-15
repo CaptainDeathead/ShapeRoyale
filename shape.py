@@ -82,7 +82,7 @@ class Shape:
         self.poison_damage = 0 # literal
         self.zone_resistance = 1.0 # percent
         self.health_regen_rate = self.info["health_regen"] # literal
-        self.damage_growth = 1.0 # percent
+        self.damage_growth = 0.0 # percent
 
         self.hp = self.max_hp
         self.shield = self.max_shield
@@ -95,6 +95,7 @@ class Shape:
 
         self.showing_powerup_popup = False
         self.powerup_popup = None
+        self.powerup_popup_create_time = time()
 
         self.rect = pg.Rect(0, 0, self.shape_image.width, self.shape_image.height)
 
@@ -107,6 +108,16 @@ class Shape:
 
         self.num_inputs = 0
         self.prioritises_x = bool(randint(0, 1))
+
+        self.kills = 0
+        self.shots_hit = 0
+        self.shots_fired = 0
+        self.total_damage = 0
+
+        self.num_common_picked = 0
+        self.num_uncommon_picked = 0
+        self.num_rare_picked = 0
+        self.num_legendary_picked = 0
 
     @property
     def global_rect(self) -> pg.Rect: return pg.Rect(self.x - self.rotated_shape_image.width * 0.5, self.y - self.rotated_shape_image.height * 0.5, self.rotated_shape_image.width, self.rotated_shape_image.height)
@@ -154,6 +165,7 @@ class Shape:
     def show_powerup_popup(self, powerup_popup: pg.Surface) -> None:
         self.powerup_popup = powerup_popup
         self.showing_powerup_popup = True
+        self.powerup_popup_create_time = time()
 
     def set_close_powerups(self, close_powerups: List[Powerup]) -> None:
         self.close_powerups = close_powerups
@@ -180,8 +192,8 @@ class Shape:
     def on_poison_end(self, poison: Poison) -> None:
         self.poisons.remove(poison)
 
-    def add_poison(self, parent: any, poison_damage: int, poison_lifesteal: float) -> None:
-        self.poisons.append(Poison(parent, self.take_damage, self.on_poison_end, poison_damage, self.POISON_DURATION, poison_lifesteal))
+    def add_poison(self, parent: any, poison_damage: int, poison_lifesteal: float, duration: float = POISON_DURATION) -> None:
+        self.poisons.append(Poison(parent, self.take_damage, self.on_poison_end, poison_damage, duration, poison_lifesteal))
 
     def give_lifesteal(self, lifesteal_health: float) -> None:
         self.give_hp(lifesteal_health)
@@ -252,6 +264,7 @@ class Shape:
                 case 270: bullet_vel = [self.max_speed * (self.bullet_speed + 1) / 2.5, 0]
 
             self.bullets.append(Bullet(self, self.x, self.y, bullet_vel, self.damage, self.damage_growth, self.poison_damage, self.penetration, self.lifesteal, self.bullet_img))
+            self.shots_fired += 1
             return True
         return False
 
@@ -300,7 +313,9 @@ class Shape:
         if not action_taken:
             self.move_to(closest_player.x, closest_player.y, dt)
 
-    def ai_move(self, dt: float, wall_distances: tuple[float], closest_powerup: Powerup | None, closest_player: Player | None, closest_bullet: Bullet | None) -> None:
+    def ai_move(self, dt: float, wall_positions: tuple[float], wall_distances: tuple[float], closest_powerup: Powerup | None, closest_player: Player | None, closest_bullet: Bullet | None) -> None:
+        player_dist = 10000
+
         if closest_powerup is not None:
             powerup_dist = obj_dist(closest_powerup, self)
         if closest_player is not None:
@@ -314,27 +329,27 @@ class Shape:
             match i:
                 case 0:
                     self.move_left(dt)
-                    self.target = (self.x, randint(0, self.map_size))
+                    self.target = (randint(wall_positions[0], wall_positions[1]), self.y)
                 case 1:
                     self.move_right(dt)
-                    self.target = (self.x, randint(0, self.map_size))
+                    self.target = (randint(wall_positions[0], wall_positions[1]), self.y)
                 case 2:
                     self.move_up(dt)
-                    self.target = (randint(0, self.map_size), self.y)
+                    self.target = (self.x, randint(wall_positions[2], wall_positions[3]))
                 case 3:
                     self.move_down(dt)
-                    self.target = (randint(0, self.map_size), self.y)
+                    self.target = (self.x, randint(wall_positions[2], wall_positions[3]))
             return
 
         if player_dist < 1000:
             self.fight_player(dt, closest_player)
-        elif closest_powerup is not None:
+        elif closest_powerup is not None and sum([int(wall_distance > 0.015) for wall_distance in wall_distances]) == 4:
             self.move_to(closest_powerup.x, closest_powerup.y, dt)
         else:
             self.move_to(self.target[0], self.target[1], dt)
 
             if dist((self.x, self.y), self.target) < 40:
-                self.target = (randint(0, self.map_size), randint(0, self.map_size))
+                self.target = (randint(wall_positions[0], wall_positions[1]), randint(wall_positions[2], wall_positions[3]))
 
     def render_info_surf(self) -> None:
         self.info_surf.fill((90, 90, 90))
@@ -372,4 +387,7 @@ class Shape:
         screen.blit(self.name_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 60))
 
         if self.showing_powerup_popup and draw_parent is self and self.is_player:
-            screen.blit(self.powerup_popup, (screen.width // 2 - self.powerup_popup.width // 2, screen.height // 2 - self.powerup_popup.height // 2))
+            if time() - self.powerup_popup_create_time > 3:
+                self.showing_powerup_popup = False
+            else:
+                screen.blit(self.powerup_popup, (screen.width // 2 - self.powerup_popup.width // 2, screen.height - self.powerup_popup.height))

@@ -111,6 +111,7 @@ class Safezone:
         bottom_wall = self.bottom_wall - player.y
 
         if left_wall > self.screen_width / 2 or right_wall < self.screen_width / 2 or top_wall > self.screen_height / 2 or bottom_wall < self.screen_height / 2:
+            player.add_poison(None, 100 * self.dt, 0.0, 2.0)
             player.take_damage(50 * self.dt / player.zone_resistance)
 
         return (left_wall, right_wall, top_wall, bottom_wall)
@@ -321,7 +322,7 @@ class ShapeRoyale:
         info = pg.display.get_desktop_sizes()[0]
         self.WIDTH = info[0]
         self.HEIGHT = info[1]
-        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN, display=1)
+        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN, display=0)
 
         self.anim_manager = AnimManager()
 
@@ -353,6 +354,7 @@ class ShapeRoyale:
         self.powerup_grid = [[[] for _ in range(self.NUM_POWERUP_SECTIONS)] for _ in range(self.NUM_POWERUP_SECTIONS)]
 
         self.bullets = []
+        self.dead_players = []
         self.players = self.generate_players()
         self.powerups = self.generate_powerups()
 
@@ -376,6 +378,10 @@ class ShapeRoyale:
         self.player.is_player = not self.spectating
 
         self.minimap_surf = pg.Surface((200, 200), pg.SRCALPHA)
+
+        self.starting_player = self.players[0]
+        self.end_screen = None
+        self.has_done_bonus_powerups = False
 
         self.main()
     
@@ -437,7 +443,7 @@ class ShapeRoyale:
 
         return shapes
 
-    def generate_powerups(self) -> List[Powerup]:
+    def generate_powerups(self, spawn_min_x: float = 0, spawn_max_x: float = MAP_SIZE-1, spawn_min_y: float = 0, spawn_max_y: float = MAP_SIZE-1) -> List[Powerup]:
         powerups = []
 
         common_rarity_max = self.powerup_info["Common"]["spawn_chance"]
@@ -453,7 +459,7 @@ class ShapeRoyale:
             elif rarity_number <= legendary_rarity_max + rare_rarity_max + uncommon_rarity_max: rarity = "Uncommon"
             else: rarity = "Common"
 
-            powerup = Powerup(randint(0, self.MAP_SIZE_X), randint(0, self.MAP_SIZE_Y), rarity, self.powerup_info, self.on_powerup_pickup)
+            powerup = Powerup(randint(spawn_min_x, spawn_max_x), randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup)
             powerups.append(powerup)
             self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].append(powerup)
 
@@ -470,13 +476,13 @@ class ShapeRoyale:
             if len(self.players) <= 1:
                 if len(self.players) == 0:
                     print(f"Tie")
+                    return
                 else:
                     print(f"Winner: {self.players[0]}")
-
-                return
+                    dt_mut *= 0.99
+                    self.end_screen = EndScreen(self.screen, self.starting_player, self.players[0])
 
             dt = (self.clock.tick(60) / 1000.0) * dt_mut
-            dt_mut = 1
             dt_sum += dt
 
             for event in pg.event.get():
@@ -494,19 +500,33 @@ class ShapeRoyale:
                         elif event.button == 1:
                             self.spectator_index = (self.spectator_index + 1) % len(self.players)
 
+                if event.type == pg.KEYDOWN:
+                    #if event.key in [pg.K_LEFT, pg.K_RIGHT, pg.K_UP, pg.K_DOWN, pg.K_a, pg.K_d, pg.K_w, pg.K_s, pg.K_SPACE]:
+                    #    if self.player.showing_powerup_popup:
+                    #        self.player.showing_powerup_popup = False
+                    ...
+
             self.anim_manager.update(dt)
             self.safezone.update(dt)
 
             self.screen.fill((0, 0, 0))
             self.safezone.blit(self.screen, self.player)
 
+            x_walls_dist = self.safezone.right_wall - self.safezone.left_wall
+            y_walls_dist = self.safezone.bottom_wall - self.safezone.top_wall
+
+            if x_walls_dist < self.MAP_SIZE / 1.66 and y_walls_dist < self.MAP_SIZE / 1.66 and not self.has_done_bonus_powerups:
+                self.NUM_POWERUPS = self.NUM_POWERUP_SECTIONS * 10 # half
+                self.powerups.extend(self.generate_powerups(int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+                self.has_done_bonus_powerups = True
+
             keys = pg.key.get_pressed()
 
             if not self.spectating:
-                if keys[pg.K_UP]: self.player.move_up(dt)
-                elif keys[pg.K_RIGHT]: self.player.move_right(dt)
-                elif keys[pg.K_DOWN]: self.player.move_down(dt)
-                elif keys[pg.K_LEFT]: self.player.move_left(dt)
+                if keys[pg.K_UP] or keys[pg.K_w]: self.player.move_up(dt)
+                elif keys[pg.K_RIGHT] or keys[pg.K_d]: self.player.move_right(dt)
+                elif keys[pg.K_DOWN] or keys[pg.K_s]: self.player.move_down(dt)
+                elif keys[pg.K_LEFT] or keys[pg.K_a]: self.player.move_left(dt)
 
                 if keys[pg.K_SPACE]:
                     if self.player.shoot():
@@ -547,7 +567,13 @@ class ShapeRoyale:
                         if player == self.player:
                             self.sounds["hitHurt"].play()
 
-                        bullet.hit(player)
+                        damage = bullet.hit(player)
+                        bullet.parent.shots_hit += 1
+                        bullet.parent.total_damage += damage
+
+                        if player.dead:
+                            bullet.parent.kills += 1
+
                         bullets_to_remove.append(bullet)
                         
                     if bullet.distance_travelled > self.MAX_BULLET_TRAVEL_DIST:
@@ -622,17 +648,19 @@ class ShapeRoyale:
 
                     danger = max(left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist)
 
-                    player.ai_move(dt, (left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist), closest_powerup, closest_player, closest_bullet)
+                    player.ai_move(dt, (int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)), (left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist), closest_powerup, closest_player, closest_bullet)
 
                 if player.dead:
                     dead_players.append(player)
 
             for dead_player in dead_players:
+                if len(self.players) == 1: continue
+
                 if dead_player == self.player:
                     self.spectating = True
 
                 for rarity, powerup_info, on_pickup in dead_player.collected_powerups:
-                    new_powerup = Powerup(dead_player.x + randint(-50, 50), dead_player.y + randint(-50, 50), rarity, powerup_info, on_pickup)
+                    new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup)
                     self.powerups.append(new_powerup)
                     self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
 
@@ -640,6 +668,8 @@ class ShapeRoyale:
                 
                 if self.spectating and dead_player.index < self.player.index:
                     self.spectator_index -= 1
+
+                self.dead_players.append(dead_player)
 
             pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, 0, (self.safezone.left_wall - self.WIDTH / 2) / self.MAP_SIZE * 200, 200))
             pg.draw.rect(self.minimap_surf, (255, 0, 0), ((self.safezone.right_wall) / self.MAP_SIZE * 200, 0, 200, 200))
@@ -664,7 +694,57 @@ class ShapeRoyale:
             if self.spectator_index < 0:
                 self.spectator_index = 0
 
+            if self.end_screen is not None and dt_mut < 0.20:
+                self.end_screen.draw()
+
             pg.display.flip()
+
+class EndScreen:
+    def __init__(self, screen: pg.Surface, my_player: Shape, winner: Shape | None) -> None:
+        self.screen = screen
+        self.my_player = my_player
+        self.winner = winner
+
+        self.won = False
+        if self.winner == self.my_player:
+            self.won = True
+
+        self.large_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 40)
+        self.medium_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 30)
+        self.small_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 20)
+
+        self.winner_lbl = self.large_font.render(f"Winner: {self.winner.shape_name}", True, (255, 255, 255))
+        
+        self.winner_sprite = pg.transform.smoothscale(self.winner.shape_image, (300, 300))
+        if winner != self.my_player:
+            self.winner_sprite = pg.transform.smoothscale(self.winner.enemy_shape_image, (300, 300))
+
+        self.powerup_stats = [self.medium_font.render(str(winner.num_common_picked), True, (255, 255, 255)),
+                              self.medium_font.render(str(winner.num_uncommon_picked), True, (255, 255, 255)),
+                              self.medium_font.render(str(winner.num_rare_picked), True, (255, 255, 255)),
+                              self.medium_font.render(str(winner.num_legendary_picked), True, (255, 255, 255))]
+
+        self.powerup_stat_spacing = 100
+        self.powerup_stat_width = sum([powerup_stat.width for powerup_stat in self.powerup_stats]) + self.powerup_stat_spacing * 4
+
+        self.winner_stats = [self.small_font.render(f"{winner.kills}x kills", True, (255, 255, 255)),
+                             self.small_font.render(f"{winner.total_damage:.2f} total damage", True, (255, 255, 255)),
+                             self.small_font.render(f"{winner.shots_hit} shots hit", True, (255, 255, 255)),
+                             self.small_font.render(f"{(winner.shots_hit / winner.shots_fired * 100):.2f}% accuracy", True, (255, 255, 255))]
+
+    def draw(self) -> None:
+        self.screen.fill(0)
+
+        self.screen.blit(self.winner_lbl, (self.screen.width // 2 - self.winner_lbl.width // 2, 50))
+        self.screen.blit(self.winner_sprite, (self.screen.width // 2 - self.winner_sprite.width // 2, 300))
+
+        x = self.screen.width // 2 - self.powerup_stat_width // 2 + self.powerup_stat_spacing
+        for stat in self.powerup_stats:
+            self.screen.blit(stat, (x, 800))
+            x += stat.width + self.powerup_stat_spacing
+
+        for i, stat in enumerate(self.winner_stats):
+            self.screen.blit(stat, (self.screen.width // 2 + 200, 300 + 40 * i))
 
 if __name__ == "__main__":
     ShapeRoyale()

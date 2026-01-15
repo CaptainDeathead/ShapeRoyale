@@ -107,9 +107,9 @@
             },
             "Plasma Gun": {
                 "blurb": "An electric shock is quite the nip!",
-                "description": "Increases bullet damage by 100% every 100 pixels",
-                "effect": "player.damagegrowth.percentage_increase",
-                "value": 2.0
+                "description": "Bullet damage increases the further it travels",
+                "effect": "player.damagegrowth.increase",
+                "value": 1.0
             }
         }
     }

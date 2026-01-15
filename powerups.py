@@ -25,7 +25,8 @@ class Poison:
             self.last_tick_time = time()
 
             self.deal_damage_func(self.damage)
-            self.parent.give_lifesteal(self.damage * self.lifesteal)
+            if self.parent is not None:
+                self.parent.give_lifesteal(self.damage * self.lifesteal)
 
             if self.duration <= 0: self.on_poison_end(self)
 
@@ -61,6 +62,7 @@ class Powerup:
 
         rect_w, rect_h = 700, 400
         surface = pg.Surface((rect_w, rect_h), pg.SRCALPHA)
+        surface.set_alpha(200)
 
         pg.draw.rect(surface, self.color, (0, 0, rect_w, rect_h), border_radius=20)
 
@@ -94,6 +96,12 @@ class Powerup:
     def pickup(self, player: any) -> None:
         player.parse_effect(self.effect, self.value)
         player.collected_powerups.append((self.rarity, self.powerup_info, self.on_pickup))
-        player.show_powerup_popup(self.render_popup())
 
+        match self.rarity:
+            case "Common": player.num_common_picked += 1
+            case "Uncommon": player.num_uncommon_picked += 1
+            case "Rare": player.num_rare_picked += 1
+            case "Legendary": player.num_legendary_picked += 1
+
+        player.show_powerup_popup(self.render_popup())
         self.on_pickup(self)
