@@ -8,6 +8,8 @@ from shape import Player, Shape
 from powerups import Powerup
 from utils import AnimManager, FONTS_PATH
 
+from networking import Server, Client, BaseClient
+
 from time import time
 from json import loads
 from math import dist, sqrt, floor, ceil
