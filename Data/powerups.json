@@ -29,9 +29,9 @@
             },
             "Self-healing Membrane": {
                 "blurb": "You may slice me down, but you'll be doing it for a long time...",
-                "description": "Increases shield regeneration rate by 20%",
+                "description": "Increases shield regeneration rate by 15%",
                 "effect": "player.shieldregenrate.percentage_increase",
-                "value": 1.2
+                "value": 1.15
             }
         }
     },
@@ -62,6 +62,18 @@
                 "description": "Increases bullet penetration by 10%",
                 "effect": "player.penetration.percentage_increase",
                 "value": 1.1
+            },
+            "Scales": {
+                "blurb": "Your bullets will BOUNCE of my skin!",
+                "description": "Increases max player health by 20hp",
+                "effect": "player.maxhp.increase",
+                "value": 20
+            },
+            "X-Stream Armour Partnership": {
+                "blurb": "90% off on all stock for a LIMITED TIME ONLY!",
+                "description": "Increases max player shield by 20hp",
+                "effect": "player.shield.increase",
+                "value": 20
             }
         }
     },
@@ -83,9 +95,9 @@
             },
             "Toxic Waste": {
                 "blurb": "Time to dispose of the chemicals!",
-                "description": "Poison's other players for +2 damage per second for 5 seconds",
+                "description": "Poison's other players for +1 damage per second for 5 seconds",
                 "effect": "player.poisondamage.increase",
-                "value": 2
+                "value": 1
             },
             "Gas Mask": {
                 "blurb": "Would this darn mask ever like stop fogging up?",

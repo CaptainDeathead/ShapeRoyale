@@ -315,14 +315,18 @@ class ShapeRoyale:
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
-    def __init__(self) -> None:
+    def __init__(self, display_surf: pg.Surface | None = None) -> None:
         if not (self.NUM_POWERUPS / self.NUM_POWERUP_SECTIONS).is_integer() or self.NUM_POWERUPS % self.NUM_POWERUP_SECTIONS != 0:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
 
         info = pg.display.get_desktop_sizes()[0]
         self.WIDTH = info[0]
         self.HEIGHT = info[1]
-        self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN, display=0)
+        
+        if display_surf is None:
+            self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN, display=0)
+        else:
+            self.screen = display_surf
 
         self.anim_manager = AnimManager()
 
@@ -363,9 +367,9 @@ class ShapeRoyale:
             "laserShoot": pg.Sound("../ShapeRoyale/Data/assets/Sounds/laserShoot.wav"),
             "powerUp": pg.Sound("../ShapeRoyale/Data/assets/Sounds/powerUp.wav"),
         }
-        self.sounds["hitHurt"].set_volume(0.75)
-        self.sounds["laserShoot"].set_volume(0.75)
-        self.sounds["powerUp"].set_volume(0.75)
+        self.sounds["hitHurt"].set_volume(0.70)
+        self.sounds["laserShoot"].set_volume(0.70)
+        self.sounds["powerUp"].set_volume(0.70)
 
         self.powerup_sections = [(i*self.POWERUP_SECTION_SIZE, (i+1)*self.POWERUP_SECTION_SIZE) for i in range(self.NUM_POWERUP_SECTIONS)]
         self.powerup_section_index = 0
@@ -504,7 +508,9 @@ class ShapeRoyale:
                     #if event.key in [pg.K_LEFT, pg.K_RIGHT, pg.K_UP, pg.K_DOWN, pg.K_a, pg.K_d, pg.K_w, pg.K_s, pg.K_SPACE]:
                     #    if self.player.showing_powerup_popup:
                     #        self.player.showing_powerup_popup = False
-                    ...
+                    if event.key == pg.K_RETURN:
+                        if self.end_screen is not None:
+                            self.__init__(self.screen)
 
             self.anim_manager.update(dt)
             self.safezone.update(dt)
@@ -604,7 +610,7 @@ class ShapeRoyale:
                             #powerup_dist = dist((powerup.x, powerup.y), (player.x, player.y))
                             powerup_dist = sqrt(powerup_dist_x ** 2 + powerup_dist_y ** 2)
 
-                            if powerup_dist > 2000: continue
+                            if powerup_dist > 1000: continue
 
                             if powerup_dist <= player.rect.w:
                                 if player == self.player:
@@ -620,7 +626,8 @@ class ShapeRoyale:
                                 closest_powerup = powerup
                     
                 if player == self.player and closest_powerup is not None:
-                    pg.draw.circle(self.screen, (255, 255, 255), (closest_powerup.x - closest_powerup.image.width // 2 - (player.x - self.WIDTH // 2 + closest_powerup.image.width // 2), closest_powerup.y - closest_powerup.image.height // 2 - (player.y - self.HEIGHT // 2 + closest_powerup.image.height // 2)), 5)
+                    ... # DEBUG STUFF
+                    #pg.draw.circle(self.screen, (255, 255, 255), (closest_powerup.x - closest_powerup.image.width // 2 - (player.x - self.WIDTH // 2 + closest_powerup.image.width // 2), closest_powerup.y - closest_powerup.image.height // 2 - (player.y - self.HEIGHT // 2 + closest_powerup.image.height // 2)), 5)
 
                 player.set_close_powerups(close_powerups)
                 player.draw(self.screen, self.player)
@@ -694,7 +701,7 @@ class ShapeRoyale:
             if self.spectator_index < 0:
                 self.spectator_index = 0
 
-            if self.end_screen is not None and dt_mut < 0.20:
+            if self.end_screen is not None and dt_mut < 0.10:
                 self.end_screen.draw()
 
             pg.display.flip()
@@ -732,6 +739,9 @@ class EndScreen:
                              self.small_font.render(f"{winner.shots_hit} shots hit", True, (255, 255, 255)),
                              self.small_font.render(f"{(winner.shots_hit / winner.shots_fired * 100):.2f}% accuracy", True, (255, 255, 255))]
 
+        self.info_lbl = self.medium_font.render   ("Press Enter to continue...", True, (255, 255, 255))
+        self.info_lbl.blit(self.medium_font.render("      Enter", True, (0, 255, 0)))
+
     def draw(self) -> None:
         self.screen.fill(0)
 
@@ -739,12 +749,15 @@ class EndScreen:
         self.screen.blit(self.winner_sprite, (self.screen.width // 2 - self.winner_sprite.width // 2, 300))
 
         x = self.screen.width // 2 - self.powerup_stat_width // 2 + self.powerup_stat_spacing
-        for stat in self.powerup_stats:
-            self.screen.blit(stat, (x, 800))
+        for i, stat in enumerate(self.powerup_stats):
+            self.screen.blit(stat, (x, 800-25))
+            pg.draw.circle(self.screen, [(0, 200, 0), (0, 0, 255), (150, 0, 255), (255, 215, 0)][i], (x - 30, 815-25), 20)
             x += stat.width + self.powerup_stat_spacing
 
         for i, stat in enumerate(self.winner_stats):
             self.screen.blit(stat, (self.screen.width // 2 + 200, 300 + 40 * i))
+
+        self.screen.blit(self.info_lbl, (self.screen.width // 2 - self.info_lbl.width // 2, self.screen.height - 150))
 
 if __name__ == "__main__":
     ShapeRoyale()
