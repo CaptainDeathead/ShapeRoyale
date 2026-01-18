@@ -1,6 +1,8 @@
 import pygame as pg
 
-from sound import generate_sine_wave
+#from sound import generate_sine_wave
+
+from networking import Server, Client, BaseClient
 
 from utils import FONTS_PATH
 from shape import Player, Shape
@@ -11,8 +13,11 @@ from time import time
 class MainMenu:
     TIMER_LENGTH = 1
 
-    def __init__(self, display_surf: pg.Surface) -> None:
+    def __init__(self, display_surf: pg.Surface, server: Server | None, client: Client | None, player_name: str | None = None) -> None:
         self.display_surf = display_surf
+        self.server = server
+        self.client = client
+        self.player_name = player_name
 
         self.clock = pg.time.Clock()
 
@@ -68,6 +73,17 @@ class MainMenu:
         self.timer_active = True
 
         if timer_time <= 1:
+            if self.server is not None:
+                self.server.sendall({"question": "send_starting_info"})
+            if self.client is not None:
+                server_ready = False
+                while not server_ready:
+                    for message in self.client.base_client.data_stream:
+                        for dtype, query in message.items():
+                            if dtype == "question" and query == "send_starting_info":
+                                self.client.send({"answer": {"send_starting_info": {"shape_index": self.player.shape_index, "name": self.player_name}}})
+                                server_ready = True
+
             self.start_game = True
 
     def draw_player_cards(self) -> None:
@@ -163,7 +179,8 @@ class MainMenu:
                     if self.timer_first_beep:
                         self.timer_first_beep = False
                     else:
-                        generate_sine_wave(800, 0.2, volume=0.15).play()
+                        #generate_sine_wave(800, 0.2, volume=0.15).play()
+                        ...
 
                     self.last_timer_time = int(round(timer_time, 0))
 
@@ -208,7 +225,7 @@ class EndScreen:
         self.winner_stats = [self.small_font.render(f"{winner.kills}x kills", True, (255, 255, 255)),
                              self.small_font.render(f"{winner.total_damage:.2f} total damage", True, (255, 255, 255)),
                              self.small_font.render(f"{winner.shots_hit} shots hit", True, (255, 255, 255)),
-                             self.small_font.render(f"{(winner.shots_hit / winner.shots_fired * 100):.2f}% accuracy", True, (255, 255, 255))]
+                             self.small_font.render(f"{(winner.shots_hit / (winner.shots_fired + 0.00000000000000000001) * 100):.2f}% accuracy", True, (255, 255, 255))]
 
         self.info_lbl = self.medium_font.render   ("Press Enter to continue...", True, (255, 255, 255))
         self.info_lbl.blit(self.medium_font.render("      Enter", True, (0, 255, 0)))

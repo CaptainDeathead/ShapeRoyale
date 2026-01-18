@@ -42,6 +42,11 @@ class Bullet:
 
         return health_damage
 
+    def to_dict(self) -> dict[str, any]:
+        return {
+            "x": self.x, "y": self.y, "velocity": self.velocity, "damage": self.base_damage, "parent_index": self.parent.index
+        }
+
     def move(self, dt: float) -> None:
         self.x += self.velocity[0] * dt * 10
         self.y += self.velocity[1] * dt * 10

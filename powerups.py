@@ -34,12 +34,13 @@ class Powerup:
     WIDTH = 50
     HEIGHT = 50
 
-    def __init__(self, x: int, y: int, rarity: str, powerup_info: Dict[str, Dict], on_pickup: object) -> None:
+    def __init__(self, x: int, y: int, rarity: str, powerup_info: Dict[str, Dict], on_pickup: object, index: int, name: str = "") -> None:
         self.x = x
         self.y = y
+        self.index = index
 
         self.rarity = rarity
-        self.name = choice(list(powerup_info[rarity]["types"]))
+        self.name = choice(list(powerup_info[rarity]["types"])) if name == "" else name
         self.powerup_info = powerup_info
         self.info = self.powerup_info[rarity]["types"][self.name]
 
@@ -54,6 +55,12 @@ class Powerup:
 
         self.image = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
         pg.draw.aacircle(self.image, self.color, (self.WIDTH // 2, self.HEIGHT // 2), self.WIDTH // 2)
+
+    def to_dict(self) -> dict[str, any]:
+        return {
+            "x": self.x, "y": self.y,
+            "rarity": self.rarity, "index": self.index, "name": self.name 
+        }
 
     def render_popup(self) -> pg.Surface:
         title_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", size=40)

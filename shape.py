@@ -3,6 +3,8 @@ import pygame as pg
 from bullet import Bullet
 from powerups import Powerup, Poison
 
+from networking import Client, BaseClient
+
 from utils import FONTS_PATH, obj_dist
 
 from math import dist
@@ -45,7 +47,7 @@ class Shape:
     }
 
     def __init__(self, map_size: int, x: float, y: float, index: int, shape_name: str, shape_info: Dict[str, Dict], shape_image: pg.Surface, enemy_shape_image: pg.Surface, bullets: List[Bullet],
-                 bullet_img: pg.Surface, is_player: bool, squad: List[any] = []) -> None:
+                 bullet_img: pg.Surface, is_player: bool, squad: List[any] = [], client: Client | None = None, player_name: str = "bot") -> None:
 
         self.map_size = map_size
 
@@ -67,6 +69,8 @@ class Shape:
 
         self.is_player = is_player
         self.squad = squad
+        self.client = client
+        self.player_name = player_name
 
         self.dead = False
 
@@ -103,7 +107,7 @@ class Shape:
         self.target = (randint(0, self.map_size), randint(0, self.map_size))
 
         self.name_font = pg.Font(f"{FONTS_PATH}/PressStart2P.ttf", 16)
-        self.name_surf = self.name_font.render(f"{self.shape_name}", True, (255, 255, 255), 15)
+        self.name_surf = self.name_font.render(f"{self.player_name}", True, (255, 255, 255), 15)
         self.info_surf = pg.Surface((100, 40), pg.SRCALPHA)
 
         self.num_inputs = 0
@@ -119,8 +123,29 @@ class Shape:
         self.num_rare_picked = 0
         self.num_legendary_picked = 0
 
+        self.last_update = 0
+
     @property
     def global_rect(self) -> pg.Rect: return pg.Rect(self.x - self.rotated_shape_image.width * 0.5, self.y - self.rotated_shape_image.height * 0.5, self.rotated_shape_image.width, self.rotated_shape_image.height)
+
+    def to_dict(self) -> dict[str, any]:
+        return {
+            "x": self.x, "y": self.y, "index": self.index, "shape_name": self.shape_name, "is_player": self.is_player, "squad": [], "player_name": self.player_name
+        }
+
+    def to_full_dict(self) -> dict[str, any]:
+        return {
+            "x": self.x, "y": self.y, "index": self.index, "rotation": self.rotation,
+            "max_hp": self.max_hp, "max_shield": self.max_shield, "max_speed": self.max_speed, "damage": self.damage, "firerate": self.firerate, "bullet_speed": self.bullet_speed, "penetration": self.penetration,
+            "shield_regen_rate": self.shield_regen_rate, "lifesteal": self.lifesteal, "poison_damage": self.poison_damage, "zone_resistance": self.zone_resistance, "health_regen_rate": self.health_regen_rate,
+            "damage_growth": self.damage_growth, "hp": self.hp, "shield": self.shield
+        }
+
+    def to_winner_dict(self) -> dict[str, any]:
+        return {
+            "index": self.index, "kills": self.kills, "shots_hit": self.shots_hit, "shots_fired": self.shots_fired, "total_damage": self.total_damage,
+            "num_common_picked": self.num_common_picked, "num_uncommon_picked": self.num_uncommon_picked, "num_rare_picked": self.num_rare_picked, "num_legendary_picked": self.num_legendary_picked
+        }
 
     def change_var_value(self, var_name: str, value_type: str, value: any) -> None:
         var = getattr(self, var_name)

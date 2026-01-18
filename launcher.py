@@ -67,6 +67,7 @@ class Launcher:
         self.root.title("Shape Royale Launcher")
         self.root.geometry("400x600")
 
+        self.get_name = lambda: "player"
         self.get_server_ip = lambda: "0.0.0.0"
         self.get_server_port = lambda: "31415"
 
@@ -89,6 +90,7 @@ class Launcher:
         return ""
 
     def join_multiplayer(self) -> None:
+        name = self.get_name()
         host = self.get_server_ip()
         port = self.get_server_port()
 
@@ -98,12 +100,13 @@ class Launcher:
 
         self.root.withdraw()
         proc = subprocess.Popen(
-            [self.get_executable(), "join", host, port]
+            [self.get_executable(), "join", host, port, name]
         )
         proc.wait()
         self.root.deiconify()
 
     def host_multiplayer(self) -> None:
+        name = self.get_name()
         host = self.get_server_ip()
         port = self.get_server_port()
 
@@ -113,7 +116,7 @@ class Launcher:
 
         self.root.withdraw()
         proc = subprocess.Popen(
-            [self.get_executable(), "host", host, port]
+            [self.get_executable(), "host", host, port, name]
         )
         proc.wait()
         self.root.deiconify()
@@ -126,6 +129,8 @@ class Launcher:
 
     def construct(self) -> None:
         self.ui_mgr.Heading("SHAPE ROYALE (PRE-ALPHA)")
+
+        self.get_name = self.ui_mgr.TextInput("NAME:", "player")
 
         self.ui_mgr.Subheading("\nMULTIPLAYER")
 

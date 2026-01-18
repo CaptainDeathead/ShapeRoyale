@@ -1,0 +1,128 @@
+{
+    "Common": {
+        "spawn_chance": 0.44,
+        "color": "(0, 200, 0)",
+        "types": {
+            "Health Pack": {
+                "blurb": "Some would say there's no such thing as a free lunch... well here it is!",
+                "description": "Increases max player health by 10hp",
+                "effect": "player.maxhp.increase",
+                "value": 10
+            },
+            "Tank": {
+                "blurb": "Sticks and stones may NOT break my bones!",
+                "description": "Increases max player shield by 10hp",
+                "effect": "player.shield.increase",
+                "value": 10
+            },
+            "Speed": {
+                "blurb": "I'm no tortoise!",
+                "description": "Increases max player speed by 1u/s",
+                "effect": "player.speed.increase",
+                "value": 1
+            },
+            "Solar Panel": {
+                "blurb": "Don't give this to vampires...",
+                "description": "Health regenerates itself by +0.5HP per second",
+                "effect": "player.healthregenrate.increase",
+                "value": 0.5
+            },
+            "Self-healing Membrane": {
+                "blurb": "You may slice me down, but you'll be doing it for a long time...",
+                "description": "Increases shield regeneration rate by 15%",
+                "effect": "player.shieldregenrate.percentage_increase",
+                "value": 1.15
+            }
+        }
+    },
+    "Uncommon": {
+        "spawn_chance": 0.35,
+        "color": "(0, 0, 255)",
+        "types": {
+            "Sniper": {
+                "blurb": "Why have health when you can have POWER! (Or both, that works too)",
+                "description": "Increases bullet damage by 1hp",
+                "effect": "player.damage.increase",
+                "value": 1
+            },
+            "Machine Gun": {
+                "blurb": "BRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR!",
+                "description": "Increases rate of fire by 0.1 bps",
+                "effect": "player.firerate.increase",
+                "value": 0.1
+            },
+            "Particle Accelerator": {
+                "blurb": "'Did ya see that?' 'Nah wha'?' 'Must've been the wind...'",
+                "description": "Increases bullet speed by 1u/s",
+                "effect": "player.bulletspeed.increase",
+                "value": 1
+            },
+            "Kitchen Knife": {
+                "blurb": "Not much more to say about Mum's favorite kitchen knife souring through the air at 463.78km/h.",
+                "description": "Increases bullet penetration by 10%",
+                "effect": "player.penetration.percentage_increase",
+                "value": 1.1
+            },
+            "Scales": {
+                "blurb": "Your bullets will BOUNCE of my skin!",
+                "description": "Increases max player health by 20hp",
+                "effect": "player.maxhp.increase",
+                "value": 20
+            },
+            "X-Stream Armour Partnership": {
+                "blurb": "90% off on all stock for a LIMITED TIME ONLY!",
+                "description": "Increases max player shield by 20hp",
+                "effect": "player.shield.increase",
+                "value": 20
+            }
+        }
+    },
+    "Rare": {
+        "spawn_chance": 0.2,
+        "color": "(150, 0, 255)",
+        "types": {
+            "Blood Donor": {
+                "blurb": "Gimme all your blood :)",
+                "description": "Increases lifesteal by 10%",
+                "effect": "player.lifesteal.percentage_increase",
+                "value": 1.1
+            },
+            "Shotgun": {
+                "blurb": "Boy, you best get off my land before I make you!",
+                "description": "Increases rate of fire by 0.3bps",
+                "effect": "player.firerate.increase",
+                "value": 0.3
+            },
+            "Toxic Waste": {
+                "blurb": "Time to dispose of the chemicals!",
+                "description": "Poison's other players for +1 damage per second for 5 seconds",
+                "effect": "player.poisondamage.increase",
+                "value": 1
+            },
+            "Gas Mask": {
+                "blurb": "Would this darn mask ever like stop fogging up?",
+                "description": "Increases zone resistance by 20%",
+                "effect": "player.zoneresistance.percentage_increase",
+                "value": 1.2
+            }
+        }
+    },
+    "Legendary": {
+        "spawn_chance": 0.01,
+        "color": "(255, 215, 0)",
+        "types": {
+            "Pacemaker": {
+                "blurb": "Waaiiitttiiinnngggg for my enimies to catch up...",
+                "description": "Health regenerates itself by +10HP per second",
+                "effect": "player.healthregenrate.increase",
+                "value": 10
+            },
+            "Plasma Gun": {
+                "blurb": "An electric shock is quite the nip!",
+                "description": "Bullet damage increases the further it travels",
+                "effect": "player.damagegrowth.increase",
+                "value": 1.0
+            }
+        }
+    }
+}

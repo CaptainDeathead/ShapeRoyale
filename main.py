@@ -1,9 +1,11 @@
 import pygame as pg
 import os
+import sys
 
-from sound import generate_sine_wave
+#from sound import generate_sine_wave
 
 from menus import MainMenu, EndScreen
+from bullet import Bullet
 from shape import Player, Shape
 from powerups import Powerup
 from utils import AnimManager, FONTS_PATH
@@ -13,7 +15,7 @@ from networking import Server, Client, BaseClient
 from time import time
 from json import loads
 from math import dist, sqrt, floor, ceil
-from random import randint, choice, uniform
+from random import randint, choice, uniform, Random, randrange
 
 from copy import deepcopy
 from typing import List, Sequence, Dict
@@ -164,7 +166,32 @@ class ShapeRoyale:
 
         self.anim_manager = AnimManager()
 
-        self.main_menu = MainMenu(self.screen)
+        self.server = None
+        self.client = None
+        self.player_name = "player"
+
+        if len(sys.argv) > 1:
+            if sys.argv[1] == "host":
+                self.host_server()
+            elif sys.argv[1] == "join":
+                self.join_server()
+
+        if len(sys.argv) == 4 and (self.client is not None or self.server is not None):
+            self.player_name = sys.argv[3]
+
+        self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+
+        real_player_info = [(self.main_menu.player.shape_index, self.player_name, None)]
+
+        if self.server is not None:
+            while len(real_player_info)-1 != len(self.server.clients):
+                for client in self.server.clients:
+                    for message in client.data_stream:
+                        for dtype, query in message.items():
+                            if dtype != "answer" or "send_starting_info" not in query:
+                                continue
+                            
+                            real_player_info.append((query["send_starting_info"]["shape_index"], query["send_starting_info"]["name"], client))
 
         self.clock = pg.time.Clock()
 
@@ -193,8 +220,16 @@ class ShapeRoyale:
 
         self.bullets = []
         self.dead_players = []
-        self.players = self.generate_players()
-        self.powerups = self.generate_powerups()
+
+        self.players = []
+        self.powerups = []
+
+        self.powerup_stage_1_seed = randrange(2**32)
+        self.powerup_stage_2_seed = randrange(2**32)
+
+        if self.client is None:
+            self.players = self.generate_players(real_player_info)
+            self.powerups = self.generate_powerups(self.powerup_stage_1_seed)
 
         self.sounds = {
             "hitHurt": pg.Sound("../ShapeRoyale/Data/assets/Sounds/hitHurt.wav"),
@@ -213,11 +248,13 @@ class ShapeRoyale:
 
         self.spectator_index = 0
         self.spectating = False
-        self.player.is_player = not self.spectating
+        
+        if len(self.players) > 0:
+            self.player.is_player = not self.spectating
+            self.starting_player = self.players[0]
 
         self.minimap_surf = pg.Surface((200, 200), pg.SRCALPHA)
 
-        self.starting_player = self.players[0]
         self.end_screen = None
         self.has_done_bonus_powerups = False
 
@@ -229,6 +266,14 @@ class ShapeRoyale:
             return self.players[self.spectator_index]
         except:
             return self.players[0]
+
+    def host_server(self) -> None:
+        self.server = Server(sys.argv[2], int(sys.argv[3]))
+
+    def join_server(self) -> None:
+        self.client = Client(sys.argv[2], int(sys.argv[3]))
+        self.client.connect()
+        self.player_name = sys.argv[4]
 
     def generate_safezone_phases(self, num_phases: int) -> None:
         phase_config = {}
@@ -259,29 +304,31 @@ class ShapeRoyale:
 
         self.phase_config = phase_config
 
-    def generate_players(self) -> List[Shape]:
+    def generate_players(self, real_player_info: List[tuple[int, str, Client | None]]) -> List[Shape]:
         shapes = []
 
-        name = self.shape_names[self.main_menu.player.shape_index]
-        new_shape = Shape(
-            self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), self.main_menu.player.shape_index, name, self.shape_info, self.shape_images[f"{name}Friendly"],
-            self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, True, []
-        )
-        new_shape.squad.append(new_shape)
-        shapes.append(new_shape)
+        for i, (shape_index, name, client) in enumerate(real_player_info):
+            print(shape_index, name, client)
+            shape_type = self.shape_names[shape_index]
+            new_shape = Shape(
+                self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), i, shape_type, self.shape_info, self.shape_images[f"{shape_type}Friendly"],
+                self.shape_images[f"{shape_type}Enemy"], self.bullets, self.bullet_img, True, [], client, name
+            )
+            new_shape.squad.append(new_shape)
+            shapes.append(new_shape)
 
-        for i in range(self.NUM_PLAYERS - 1):
+        for i in range(len(shapes), self.NUM_PLAYERS):
             name = choice(self.shape_names)
             new_shape = Shape(
-                self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), i+1, name, self.shape_info, self.shape_images[f"{name}Friendly"],
-                self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, is_player=False, squad=[]
+                self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), i, name, self.shape_info, self.shape_images[f"{name}Friendly"],
+                self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, is_player=False, squad=[], player_name=f"Bot {i+1}"
             )
             new_shape.squad.append(new_shape)
             shapes.append(new_shape)
 
         return shapes
 
-    def generate_powerups(self, spawn_min_x: float = 0, spawn_max_x: float = MAP_SIZE-1, spawn_min_y: float = 0, spawn_max_y: float = MAP_SIZE-1) -> List[Powerup]:
+    def generate_powerups(self, seed: int, starting_index: int = 0, spawn_min_x: float = 0, spawn_max_x: float = MAP_SIZE-1, spawn_min_y: float = 0, spawn_max_y: float = MAP_SIZE-1) -> List[Powerup]:
         powerups = []
 
         common_rarity_max = self.powerup_info["Common"]["spawn_chance"]
@@ -289,26 +336,62 @@ class ShapeRoyale:
         rare_rarity_max = self.powerup_info["Rare"]["spawn_chance"]
         legendary_rarity_max = self.powerup_info["Legendary"]["spawn_chance"]
 
+        rng = Random(seed)
+
         for i in range(self.NUM_POWERUPS):
-            rarity_number = uniform(0.0, 1.0)
+            rarity_number = rng.uniform(0.0, 1.0)
 
             if rarity_number <= legendary_rarity_max: rarity = "Legendary"
             elif rarity_number <= legendary_rarity_max + rare_rarity_max: rarity = "Rare"
             elif rarity_number <= legendary_rarity_max + rare_rarity_max + uncommon_rarity_max: rarity = "Uncommon"
             else: rarity = "Common"
 
-            powerup = Powerup(randint(spawn_min_x, spawn_max_x), randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup)
+            powerup = Powerup(rng.randint(spawn_min_x, spawn_max_x), rng.randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup, starting_index+i, rng.choice(list(self.powerup_info[rarity]["types"])))
             powerups.append(powerup)
             self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].append(powerup)
 
         return powerups
 
     def on_powerup_pickup(self, powerup: Powerup) -> None:
-        self.powerups.remove(powerup)
+        if powerup in self.powerups:
+            self.powerups.remove(powerup)
 
     def main(self) -> None:
         dt_mut = 1
         dt_sum = 0
+
+        if self.server is not None:
+            player_data = [player.to_dict() for player in self.players]
+            for i, client in enumerate(self.server.clients):
+                client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
+                client.send({"answer": {"player_set": player_data}})
+                #client.send({"answer": {"player_set": True}})
+                client.send({"answer": {"player_index": i+1}})
+
+        if self.client is not None:
+            done = False
+            while not done:
+                for message in self.client.base_client.data_stream:
+                    for dtype, query in message.items():
+                        if dtype != "answer":
+                            continue
+
+                        if "powerup_set" in query:
+                            if query["powerup_set"]["stage"] == 1:
+                                self.powerups = self.generate_powerups(query["powerup_set"]["seed"])
+                            else:
+                                self.powerups.extend(self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+
+                        elif "player_set" in query:
+                            self.players = [Shape(self.MAP_SIZE, player_desc["x"], player_desc["y"], player_desc["index"], player_desc["shape_name"], self.shape_info, self.shape_images[f"{player_desc["shape_name"]}Friendly"], self.shape_images[f"{player_desc["shape_name"]}Enemy"], self.bullets, self.bullet_img, player_desc["is_player"], player_desc["squad"], None, player_desc["player_name"]) for player_desc in query["player_set"]]
+                        elif "player_index" in query:
+                            self.spectator_index = query["player_index"]
+                            #self.spectating = True
+
+                        if self.powerups != [] and self.players != [] and self.spectator_index != 0: done = True
+                
+            self.player.squad.append(self.player)
+            self.starting_player = self.players[self.spectator_index]
 
         while 1:
             if len(self.players) <= 1:
@@ -320,8 +403,137 @@ class ShapeRoyale:
                     dt_mut *= 0.99
                     self.end_screen = EndScreen(self.screen, self.starting_player, self.players[0])
 
+                    if self.server is not None:
+                        for client in self.server.clients:
+                            client.send({"answer": {"winner": self.player.to_winner_dict()}})
+
             dt = (self.clock.tick(60) / 1000.0) * dt_mut
             dt_sum += dt
+
+            if self.client is not None:
+                for message in self.client.base_client.data_stream:
+                    for dtype, query in message.items():
+                        if dtype != "answer":
+                            continue
+
+                        if "player_update" in query:
+                            update = query["player_update"]
+                            for player_update in update:
+                                target_player = None
+                                for player in self.players:
+                                    if player.index == player_update["index"]:
+                                        target_player = player
+                                        break
+
+                                if target_player is not None:
+                                    for key, value in player_update.items():
+                                        if key in ("x", "y", "rotation") and target_player == self.player and not self.spectating:
+                                            continue
+
+                                        setattr(target_player, key, value)
+
+                                    target_player.last_update = time()
+
+                        if "winner" in query:
+                            update = query["winner"]
+                            target_player = None
+                            for player in self.players:
+                                if player.index == update["index"]:
+                                    target_player = player
+                                    break
+                            
+                            if target_player is not None:
+                                for key, value in update.items():
+                                    setattr(target_player, key, value)
+
+                        if "player_remove" in query:
+                            target_player = None
+                            for player in self.players:
+                                if player.index == query["player_remove"]:
+                                    target_player = player
+                                    break
+                            
+                            if target_player is not None:
+                                if target_player.index < self.spectator_index:
+                                    self.spectator_index -= 1
+
+                                self.players.remove(target_player)
+
+                        if "set_bullets" in query:
+                            update = query["set_bullets"]
+                            self.bullets = []
+                            for bullet in update:
+                                target_player = None
+                                for player in self.players:
+                                    if player.index == bullet["parent_index"]:
+                                        target_player = player
+                                        break
+
+                                self.bullets.append(Bullet(target_player, bullet["x"], bullet["y"], bullet["velocity"], bullet["damage"], 1, 1, 1, 1, self.bullet_img))
+
+                        if "powerup_add" in query:
+                            powerup_desc = query["powerup_add"]
+
+                            new_powerup = Powerup(
+                                powerup_desc["x"], powerup_desc["y"], powerup_desc["rarity"], self.powerup_info, self.on_powerup_pickup, powerup_desc["index"], powerup_desc["name"]
+                            )
+
+                            self.powerups.append(new_powerup)
+
+                            grid_square = self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)]
+                            grid_square.append(new_powerup)
+
+                        if "powerup_remove" in query:
+                            update = query["powerup_remove"]
+
+                            target_powerup = None
+                            for powerup in self.powerups:
+                                if powerup.index == update["powerup_index"]:
+                                    target_powerup = powerup
+                                    break
+                            
+                            if target_powerup is not None:
+                                grid_square = self.powerup_grid[floor(target_powerup.y / self.POWERUP_SECTION_SIZE)][floor(target_powerup.x / self.POWERUP_SECTION_SIZE)]
+                                if target_powerup in grid_square:
+                                    grid_square.remove(target_powerup)
+
+                                if target_powerup in self.powerups:
+                                    self.powerups.remove(target_powerup)
+
+                        if "powerup_set" in query:
+                            if query["powerup_set"]["stage"] == 1:
+                                self.powerups = self.generate_powerups(query["powerup_set"]["seed"])
+                            else:
+                                self.powerups.extend(self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+
+            elif self.server is not None:
+                for client in self.server.clients:
+                    for message in client.data_stream:
+                        for dtype, query in message.items():
+                            if dtype != "answer":
+                                continue
+
+                            if "player_pos_update" in query:
+                                update = query["player_pos_update"]
+                                target_player = None
+                                for player in self.players:
+                                    if player.index == update["index"]:
+                                        target_player = player
+                                        break
+
+                                if target_player is not None:
+                                    for key, value in update.items():
+                                        setattr(target_player, key, value)
+
+                            elif "player_shoot" in query:
+                                target_player = None
+                                for player in self.players:
+                                    if player.index == query["player_shoot"]["index"]:
+                                        target_player = player
+                                        break
+                                
+                                if target_player is not None:
+                                    target_player.shoot()
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -355,10 +567,14 @@ class ShapeRoyale:
             x_walls_dist = self.safezone.right_wall - self.safezone.left_wall
             y_walls_dist = self.safezone.bottom_wall - self.safezone.top_wall
 
-            if x_walls_dist < self.MAP_SIZE / 1.66 and y_walls_dist < self.MAP_SIZE / 1.66 and not self.has_done_bonus_powerups:
+            if x_walls_dist < self.MAP_SIZE / 1.66 and y_walls_dist < self.MAP_SIZE / 1.66 and not self.has_done_bonus_powerups and self.client is None:
                 self.NUM_POWERUPS = self.NUM_POWERUP_SECTIONS * 10 # half
-                self.powerups.extend(self.generate_powerups(int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+                self.powerups.extend(self.generate_powerups(self.powerup_stage_2_seed, self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
                 self.has_done_bonus_powerups = True
+
+                if self.server is not None:
+                    for client in self.server.clients:
+                        client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_2_seed, "stage": 2}}})
 
             keys = pg.key.get_pressed()
 
@@ -368,14 +584,22 @@ class ShapeRoyale:
                 elif keys[pg.K_DOWN] or keys[pg.K_s]: self.player.move_down(dt)
                 elif keys[pg.K_LEFT] or keys[pg.K_a]: self.player.move_left(dt)
 
+                if self.client is not None:
+                    if not self.spectating:
+                        self.client.send({"answer": {"player_pos_update": {"x": self.player.x, "y": self.player.y, "rotation": self.player.rotation, "index": self.player.index}}})
+
                 if keys[pg.K_SPACE]:
                     if self.player.shoot():
                         self.sounds["laserShoot"].play()
+                    
+                    if self.client is not None:
+                        if not self.spectating:
+                            self.client.send({"answer": {"player_shoot": {"index": self.player.index}}})
 
                 elif keys[pg.K_LSHIFT]:
                     if self.player.showing_powerup_popup:
                         self.player.showing_powerup_popup = False
-
+                
             self.minimap_surf.fill((0, 0, 0))
 
             for powerup in self.powerups:
@@ -395,11 +619,16 @@ class ShapeRoyale:
 
                 closest_bullet = None
                 closest_dist = float('inf')
+                close_bullets = []
 
                 bullets_to_remove = []
                 for bullet in self.bullets:
                     if player == self.player:
                         bullet.draw(self.screen, self.player)
+
+                    bullet_dist = dist((bullet.x, bullet.y), (player.x, player.y))
+                    if bullet_dist < 2000:
+                        close_bullets.append(bullet)
                     
                     if bullet.parent == player: continue
 
@@ -407,21 +636,20 @@ class ShapeRoyale:
                         if player == self.player:
                             self.sounds["hitHurt"].play()
 
-                        damage = bullet.hit(player)
-                        bullet.parent.shots_hit += 1
-                        bullet.parent.total_damage += damage
+                        if self.client is None:
+                            damage = bullet.hit(player)
+                            bullet.parent.shots_hit += 1
+                            bullet.parent.total_damage += damage
 
-                        if player.dead:
-                            bullet.parent.kills += 1
+                            if player.dead:
+                                bullet.parent.kills += 1
 
-                        bullets_to_remove.append(bullet)
+                            bullets_to_remove.append(bullet)
                         
-                    if bullet.distance_travelled > self.MAX_BULLET_TRAVEL_DIST:
+                    if bullet.distance_travelled > self.MAX_BULLET_TRAVEL_DIST and self.client is None:
                         bullets_to_remove.append(bullet)
 
                     if bullet not in bullets_to_remove:
-                        bullet_dist = dist((bullet.x, bullet.y), (player.x, player.y))
-
                         if bullet_dist < closest_dist:
                             closest_dist = bullet_dist
                             closest_bullet = bullet
@@ -429,6 +657,10 @@ class ShapeRoyale:
                 for bullet in bullets_to_remove:
                     if bullet in self.bullets:
                         self.bullets.remove(bullet)
+
+                if self.server is not None:
+                    if player.index != 0 and player.index <= len(self.server.clients):
+                        self.server.clients[player.index-1].send({"answer": {"set_bullets": [bullet.to_dict() for bullet in close_bullets]}})
 
                 close_powerups = []
                 closest_powerup = None
@@ -450,8 +682,14 @@ class ShapeRoyale:
                                 if player == self.player:
                                     self.sounds["powerUp"].play()
 
-                                self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].remove(powerup)
-                                powerup.pickup(player)
+                                if self.client is None or 1:
+                                    self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].remove(powerup)
+                                    
+                                    if self.server is not None:
+                                        for client in self.server.clients:
+                                            client.send({"answer": {"powerup_remove": {"powerup_index": powerup.index}}})
+
+                                    powerup.pickup(player)
                             else:
                                 close_powerups.append(powerup)
 
@@ -468,13 +706,21 @@ class ShapeRoyale:
 
                 closest_player = None
                 closest_dist = float('inf')
+                close_players = []
                 for other_player in self.players:
+                    player_dist = dist((other_player.x, other_player.y), (player.x, player.y))
+                    if player_dist < 2000:
+                        close_players.append(other_player)
+
                     if other_player is player: continue
 
-                    player_dist = dist((other_player.x, other_player.y), (player.x, player.y))
                     if player_dist < closest_dist:
                         closest_dist = player_dist
                         closest_player = other_player
+
+                if self.server is not None:
+                    if player.index != 0 and player.index <= len(self.server.clients):
+                        self.server.clients[player.index-1].send({"answer": {"player_update": [player.to_full_dict() for player in self.players]}})
 
                 if not player.is_player:
                     left_wall += self.WIDTH / 2
@@ -489,10 +735,19 @@ class ShapeRoyale:
 
                     danger = max(left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist)
 
-                    player.ai_move(dt, (int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)), (left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist), closest_powerup, closest_player, closest_bullet)
+                    if self.client is None:
+                        if self.server is None:
+                            player.ai_move(dt, (int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)), (left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist), closest_powerup, closest_player, closest_bullet)
+                        else:
+                            if player.index > len(self.server.clients):
+                                player.ai_move(dt, (int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)), (left_wall_dist, right_wall_dist, top_wall_dist, bottom_wall_dist), closest_powerup, closest_player, closest_bullet)
 
-                if player.dead:
+                if player.dead and self.client is None:
                     dead_players.append(player)
+
+                if self.client is not None:
+                    if time() - player.last_update > 3:
+                        player.x = -1000
 
             for dead_player in dead_players:
                 if len(self.players) == 1: continue
@@ -501,9 +756,17 @@ class ShapeRoyale:
                     self.spectating = True
 
                 for rarity, powerup_info, on_pickup in dead_player.collected_powerups:
-                    new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup)
+                    new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup, len(self.powerups))
                     self.powerups.append(new_powerup)
                     self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
+
+                    if self.server is not None:
+                        for client in self.server.clients:
+                            client.send({"answer": {"powerup_add": new_powerup.to_dict()}})
+
+                if self.server is not None:
+                    for client in self.server.clients:
+                        client.send({"answer": {"player_remove": dead_player.index}})
 
                 self.players.remove(dead_player)
                 
@@ -511,6 +774,9 @@ class ShapeRoyale:
                     self.spectator_index -= 1
 
                 self.dead_players.append(dead_player)
+
+            if self.starting_player.index != self.player.index:
+                self.spectating = True
 
             pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, 0, (self.safezone.left_wall - self.WIDTH / 2) / self.MAP_SIZE * 200, 200))
             pg.draw.rect(self.minimap_surf, (255, 0, 0), ((self.safezone.right_wall) / self.MAP_SIZE * 200, 0, 200, 200))
