@@ -1,4 +1,5 @@
 import pygame as pg
+import sys
 
 #from sound import generate_sine_wave
 
@@ -57,6 +58,13 @@ class MainMenu:
         with open("../ShapeRoyale/Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
 
+
+        if self.server is not None:
+            self.player_info = {}
+            for i in range(len(self.server.clients)):
+                self.player_info[i] = {"ready": False, "name": "player"}
+
+
         self.main()
 
     def reset_timer(self) -> None:
@@ -78,6 +86,21 @@ class MainMenu:
             if self.client is not None:
                 server_ready = False
                 while not server_ready:
+                    self.clock.tick(60)
+
+                    pg.display.flip()
+                    for event in pg.event.get():
+                        if event.type == pg.QUIT:
+                            pg.quit()
+                            sys.exit(0)
+
+                        elif event.type == pg.KEYDOWN:
+                            if event.key == pg.K_RETURN:
+                                self.player.ready = not self.player.ready
+                                return
+
+                    self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
+
                     for message in self.client.base_client.data_stream:
                         for dtype, query in message.items():
                             if dtype == "question" and query == "send_starting_info":
@@ -100,7 +123,7 @@ class MainMenu:
 
         x = start_x + (card_w + pad_w)
 
-        name_lbl = self.fonts["medium"].render(f"Player 1", True, (255, 255, 255))
+        name_lbl = self.fonts["medium"].render(self.player_name, True, (255, 255, 255))
         self.display_surf.blit(name_lbl, (x + card_w // 2 - name_lbl.width // 2, card_y - 70))
 
         pg.draw.line(self.display_surf, self.player.ready_color, (x + card_w // 2 - ready_line_w // 2, card_y - 20), (x + card_w // 2 + ready_line_w // 2, card_y - 20), 5)
@@ -156,7 +179,11 @@ class MainMenu:
             self.clock.tick(60)
 
             for event in pg.event.get():
-                if event.type == pg.KEYDOWN:
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit(0)
+                
+                elif event.type == pg.KEYDOWN:
                     if event.key == pg.K_RETURN:
                         self.player.ready = not self.player.ready
                     elif event.key == pg.K_LEFT:
@@ -189,6 +216,23 @@ class MainMenu:
                 self.display_surf.blit(self.timer_end_lbls[curr_time_int-1], (self.width // 2 - self.timer_start_lbl.width // 2, self.height - 150))
             else:
                 self.display_surf.blit(self.info_lbl, (self.width // 2 - self.info_lbl.width // 2, self.height - 150))
+
+            if self.server is not None:
+                for i, player_info in self.player_info.items():
+                    player_ready, player_name = player_info.values()
+                    self.display_surf.blit(self.fonts["small"].render(f"{player_name} - Ready: {player_ready}", True, (255, 255, 255)), (self.width // 2 + 300, self.height // 2 - 200 + (30 * i)))
+
+                for i, client in enumerate(self.server.clients):
+                    for message in client.data_stream:
+                        for dtype, query in message.items():
+                            if dtype != "answer":
+                                continue
+
+                            if "ready" in query:
+                                self.player_info[i] = {"ready": query["ready"], "name": query["name"]}
+
+            if self.client is not None:
+                self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
             self.check_game_start()
 

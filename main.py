@@ -555,7 +555,7 @@ class ShapeRoyale:
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     pg.quit()
-                    exit()
+                    sys.exit(0)
 
                 if self.spectating:
                     if event.type == pg.MOUSEBUTTONDOWN:
