@@ -580,7 +580,7 @@ class ShapeRoyale:
             for y in self.powerup_grid:
                 num_powerups_in_sec += len(y)
 
-            print(num_powerups, num_powerups_in_sec)
+            #print(num_powerups, num_powerups_in_sec)
 
             self.anim_manager.update(dt)
             self.safezone.update(dt)
