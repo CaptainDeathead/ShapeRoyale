@@ -116,8 +116,8 @@ class Safezone:
         bottom_wall = self.bottom_wall - player.y
 
         if left_wall > self.screen_width / 2 or right_wall < self.screen_width / 2 or top_wall > self.screen_height / 2 or bottom_wall < self.screen_height / 2:
-            player.add_poison(None, 100 * self.dt, 0.0, 2.0)
-            player.take_damage(50 * self.dt / player.zone_resistance)
+            #player.add_poison(None, 30 * self.dt, 0.0, 2.0)
+            player.take_damage((50 + player.health_regen_rate) * self.dt / player.zone_resistance)
 
         return (left_wall, right_wall, top_wall, bottom_wall)
 
@@ -191,7 +191,11 @@ class ShapeRoyale:
                             if dtype != "answer" or "send_starting_info" not in query:
                                 continue
                             
-                            real_player_info.append((query["send_starting_info"]["shape_index"], query["send_starting_info"]["name"], client))
+                            player_name = query["send_starting_info"]["name"]
+                            if len(player_name) > 25:
+                                player_name = player_name[:25]
+
+                            real_player_info.append((query["send_starting_info"]["shape_index"], player_name, client))
 
         self.clock = pg.time.Clock()
 
@@ -248,6 +252,7 @@ class ShapeRoyale:
 
         self.spectator_index = 0
         self.spectating = False
+        self.spectator_player = None
         
         if len(self.players) > 0:
             self.player.is_player = not self.spectating
@@ -413,6 +418,7 @@ class ShapeRoyale:
             self.player.squad.append(self.player)
             self.starting_player = self.players[self.spectator_index]
 
+        self.spectator_player = self.player
         while 1:
             if len(self.players) <= 1:
                 if len(self.players) == 0:
@@ -474,8 +480,8 @@ class ShapeRoyale:
                                     break
                             
                             if target_player is not None:
-                                if target_player.index < self.spectator_index:
-                                    self.spectator_index -= 1
+                                #if target_player.index < self.spectator_index:
+                                #    self.spectator_index -= 1
 
                                 self.players.remove(target_player)
 
@@ -561,6 +567,8 @@ class ShapeRoyale:
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
+                    if self.server is not None:
+                        self.server.shutdown()
                     pg.quit()
                     sys.exit(0)
 
@@ -571,8 +579,11 @@ class ShapeRoyale:
                             if self.spectator_index < 0:
                                 self.spectator_index = len(self.players) - 1
 
+                            self.spectator_player = self.player
+                            
                         elif event.button == 1:
                             self.spectator_index = (self.spectator_index + 1) % len(self.players)
+                            self.spectator_player = self.player
 
                 if event.type == pg.KEYDOWN:
                     #if event.key in [pg.K_LEFT, pg.K_RIGHT, pg.K_UP, pg.K_DOWN, pg.K_a, pg.K_d, pg.K_w, pg.K_s, pg.K_SPACE]:
@@ -588,6 +599,10 @@ class ShapeRoyale:
                 num_powerups_in_sec += len(y)
 
             #print(num_powerups, num_powerups_in_sec)
+            if self.spectator_player not in self.players:
+                self.spectator_player = self.player
+
+            self.spectator_index = self.players.index(self.spectator_player)
 
             self.anim_manager.update(dt)
             self.safezone.update(dt)
@@ -658,8 +673,9 @@ class ShapeRoyale:
                         bullet.draw(self.screen, self.player)
 
                     bullet_dist = dist((bullet.x, bullet.y), (player.x, player.y))
-                    if bullet_dist < 2000:
-                        close_bullets.append(bullet)
+                    #if bullet_dist < 2000:
+                    #    close_bullets.append(bullet)
+                    close_bullets.append(bullet)
                     
                     if bullet.parent == player: continue
 
@@ -749,10 +765,6 @@ class ShapeRoyale:
                         closest_dist = player_dist
                         closest_player = other_player
 
-                if self.server is not None:
-                    if player.index != 0 and player.index <= len(self.server.clients):
-                        self.server.clients[player.index-1].send({"answer": {"player_update": [player.to_full_dict() for player in self.players]}})
-
                 if not player.is_player:
                     left_wall += self.WIDTH / 2
                     right_wall -= self.WIDTH / 2
@@ -801,10 +813,15 @@ class ShapeRoyale:
 
                 self.players.remove(dead_player)
                 
-                if self.spectating and dead_player.index < self.player.index:
-                    self.spectator_index -= 1
+                #if self.spectating and dead_player.index < self.player.index:
+                #    self.spectator_index -= 1
 
                 self.dead_players.append(dead_player)
+
+            if self.server is not None:
+                game_player_info = {"answer": {"player_update": [game_player.to_full_dict() for game_player in self.players]}}
+                for client in self.server.clients:
+                    client.send(game_player_info)
 
             if self.starting_player.index != self.player.index:
                 self.spectating = True
@@ -828,9 +845,11 @@ class ShapeRoyale:
             self.powerup_section_index += 1
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0
 
-            self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
-            if self.spectator_index < 0:
-                self.spectator_index = 0
+            #self.spectator_index = min(self.spectator_index, max(0, len(self.players)-1))
+            #if self.spectator_index < 0:
+            #    self.spectator_index = 0
+
+            #self.spectator_player = self.player
 
             if self.end_screen is not None and dt_mut < 0.10:
                 self.end_screen.draw()

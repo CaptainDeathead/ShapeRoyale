@@ -90,6 +90,9 @@ class MainMenu:
                     pg.display.flip()
                     for event in pg.event.get():
                         if event.type == pg.QUIT:
+                            if self.server is not None:
+                                self.server.shutdown()
+
                             pg.quit()
                             sys.exit(0)
 
@@ -180,9 +183,12 @@ class MainMenu:
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
+                    if self.server is not None:
+                        self.server.shutdown()
+
                     pg.quit()
                     sys.exit(0)
-                
+ 
                 elif event.type == pg.KEYDOWN:
                     if event.key == pg.K_RETURN:
                         self.player.ready = not self.player.ready
@@ -229,7 +235,11 @@ class MainMenu:
                                 continue
 
                             if "ready" in query:
-                                self.player_info[i] = {"ready": query["ready"], "name": query["name"]}
+                                player_name = query["name"]
+                                if len(player_name) > 25:
+                                    player_name = player_name[:25]
+
+                                self.player_info[i] = {"ready": query["ready"], "name": player_name}
 
             if self.client is not None:
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})

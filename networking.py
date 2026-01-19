@@ -10,7 +10,7 @@ class BaseClient:
     def __init__(self, conn: socket.socket, addr: tuple[str, int], is_client: bool) -> None:
         self.conn = conn
         self.addr = addr
-        self.sockname = list(self.conn.getsockname())
+        #self.sockname = list(self.conn.getsockname())
         self.is_client = is_client
 
         self.dead = False
@@ -227,3 +227,11 @@ class Server:
             conn, addr = self.sock.accept()
             #data, addr = self.sock.recvfrom(2048)
             self.handle_client(conn, addr)
+
+    def shutdown(self) -> None:
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except Exception as e:
+            print(f"Server - Error while shutting down! {e}.")
+        
+        self.sock.close()
