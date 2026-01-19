@@ -18,8 +18,8 @@ class BaseClient:
 
         self.disconnect_on_fail = not self.is_client
 
-        if is_client:
-            self.recv_thread = Thread(target=self.poll_recv, daemon=True)
+        self.recv_thread = Thread(target=self.poll_recv, daemon=True)
+        if not self.is_client:
             self.recv_thread.start()
     
     @property
@@ -53,12 +53,12 @@ class BaseClient:
         #    json_data["to"] = list(self.addr)
 
         data = json.dumps(json_data)
-        raw_data = data.encode()
-        #data_size = len(raw_data).to_bytes(4, byteorder="big") # 4 bytes
+        raw_data = zlib.compress(data.encode())
+        data_size = len(raw_data).to_bytes(4, byteorder="big") # 4 bytes
 
         try:
-            #self.conn.sendto(data_size + raw_data, self.addr)
-            self.conn.sendto(zlib.compress(raw_data), self.addr)
+            self.conn.sendto(data_size + raw_data, self.addr)
+            #self.conn.sendto(zlib.compress(raw_data), self.addr)
         except Exception as e:
             print(f"BaseClient - Error while sending data! {e}.")
 
@@ -85,10 +85,10 @@ class BaseClient:
 
     def recv(self) -> dict[any, any]:
         try:
-            #data_size = int.from_bytes(self.conn.recv(4), byteorder="big")
-            ...
+            data_size = int.from_bytes(self.conn.recv(4), byteorder="big")
         except Exception as e:
             print(f"BaseClient - Error while receiving data size! {e}. Attempting to clear receive buffer!")
+            exit()
             try:
                 self.conn.recv(99999)
             except Exception as e1:
@@ -98,7 +98,7 @@ class BaseClient:
                 return {}
 
         try:
-            raw_data = zlib.decompress(self.conn.recv(4096))
+            raw_data = zlib.decompress(self.conn.recv(data_size))
         except Exception as e:
             print(f"BaseClient - Error while receiving data! {e}. Attempting to clear receive buffer!")
             try:
@@ -131,7 +131,7 @@ class Client:
         self.HOST = host
         self.PORT = port
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.base_client = None
 
     @property
@@ -163,17 +163,13 @@ class Client:
         while curr_try < max_retries:
             curr_try += 1
             print("Connecting...")
-            self.sock.connect((self.HOST, self.PORT))
-            self.base_client.send({"question": "hello?"})
-
-            sleep(1)
-
-            for message in self.base_client.data_stream:
-                for dtype, query in message.items():
-                    if dtype == "answer" and query == "hi":
-                        print("Connected successfully!")
-                        self.disconnect_on_fail = True
-                        return True
+            try:
+                self.sock.connect((self.HOST, self.PORT))
+                print("E")
+                self.base_client.recv_thread.start()
+                return True
+            except:
+                ...
 
         return False
 class Server:
@@ -186,7 +182,7 @@ class Server:
         self.outgoing_blocks = {}
         self.incoming_blocks = {}
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         self.server_thread = Thread(target=self.start, daemon=True)
@@ -198,16 +194,16 @@ class Server:
     @property
     def num_connections(self) -> int: return len(self.clients)
 
-    def handle_client(self, data: bytes, addr: tuple[str, int]) -> None:
+    def handle_client(self, conn: bytes, addr: tuple[str, int]) -> None:
         for client in self.clients:
             if client.addr == addr:
-                client.proc_recv(data)
+                #client.proc_recv(data)
                 return
 
         print(f"Client with addr {addr} connected!")
 
-        self.clients.append(BaseClient(self.sock, addr, False))
-        self.clients[-1].send({"answer": "hi"})
+        self.clients.append(BaseClient(conn, addr, False))
+        #self.clients[-1].send({"answer": "hi"})
 
     def sendall(self, json_data: dict[any, any]) -> None:
         for client in self.clients:
@@ -217,9 +213,9 @@ class Server:
         print(f"Running server on {(self.HOST, self.PORT)}...")
 
         self.sock.bind((self.HOST, self.PORT))
-        #self.sock.listen()
+        self.sock.listen()
 
         while 1:
-            #conn, addr = self.sock.accept()
-            data, addr = self.sock.recvfrom(2048)
-            self.handle_client(data, addr)
+            conn, addr = self.sock.accept()
+            #data, addr = self.sock.recvfrom(2048)
+            self.handle_client(conn, addr)

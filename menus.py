@@ -58,12 +58,10 @@ class MainMenu:
         with open("../ShapeRoyale/Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
 
-
         if self.server is not None:
             self.player_info = {}
             for i in range(len(self.server.clients)):
                 self.player_info[i] = {"ready": False, "name": "player"}
-
 
         self.main()
 
