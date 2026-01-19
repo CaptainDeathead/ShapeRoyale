@@ -83,9 +83,18 @@ class BaseClient:
 
         self.raw_data_stream.append(json_data)
 
+    def recv_exact(self, n: int) -> bytes:
+        buf = b''
+        while len(buf) < n:
+            chunk = self.conn.recv(n - len(buf))
+            if not chunk:
+                raise ConnectionError("Connection bad")
+            buf += chunk
+        return buf
+
     def recv(self) -> dict[any, any]:
         try:
-            data_size = int.from_bytes(self.conn.recv(4), byteorder="big")
+            data_size = int.from_bytes(self.recv_exact(4), byteorder="big")
         except Exception as e:
             print(f"BaseClient - Error while receiving data size! {e}. Attempting to clear receive buffer!")
             exit()
@@ -98,7 +107,7 @@ class BaseClient:
                 return {}
 
         try:
-            raw_data = zlib.decompress(self.conn.recv(data_size))
+            raw_data = zlib.decompress(self.recv_exact(data_size))
         except Exception as e:
             print(f"BaseClient - Error while receiving data! {e}. Attempting to clear receive buffer!")
             try:
@@ -165,7 +174,6 @@ class Client:
             print("Connecting...")
             try:
                 self.sock.connect((self.HOST, self.PORT))
-                print("E")
                 self.base_client.recv_thread.start()
                 return True
             except:
