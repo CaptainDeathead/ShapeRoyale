@@ -311,7 +311,7 @@ class ShapeRoyale:
             print(shape_index, name, client)
             shape_type = self.shape_names[shape_index]
             new_shape = Shape(
-                self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), i, shape_type, self.shape_info, self.shape_images[f"{shape_type}Friendly"],
+                self.MAP_SIZE, randint(3000, self.MAP_SIZE_X-3000), randint(3000, self.MAP_SIZE_Y-3000), i, shape_type, self.shape_info, self.shape_images[f"{shape_type}Friendly"],
                 self.shape_images[f"{shape_type}Enemy"], self.bullets, self.bullet_img, True, [], client, name
             )
             new_shape.squad.append(new_shape)
@@ -320,7 +320,7 @@ class ShapeRoyale:
         for i in range(len(shapes), self.NUM_PLAYERS):
             name = choice(self.shape_names)
             new_shape = Shape(
-                self.MAP_SIZE, randint(1000, self.MAP_SIZE_X-1000), randint(1000, self.MAP_SIZE_Y-1000), i, name, self.shape_info, self.shape_images[f"{name}Friendly"],
+                self.MAP_SIZE, randint(3000, self.MAP_SIZE_X-3000), randint(3000, self.MAP_SIZE_Y-3000), i, name, self.shape_info, self.shape_images[f"{name}Friendly"],
                 self.shape_images[f"{name}Enemy"], self.bullets, self.bullet_img, is_player=False, squad=[], player_name=f"Bot {i+1}"
             )
             new_shape.squad.append(new_shape)
@@ -384,6 +384,8 @@ class ShapeRoyale:
 
                         elif "player_set" in query:
                             self.players = [Shape(self.MAP_SIZE, player_desc["x"], player_desc["y"], player_desc["index"], player_desc["shape_name"], self.shape_info, self.shape_images[f"{player_desc["shape_name"]}Friendly"], self.shape_images[f"{player_desc["shape_name"]}Enemy"], self.bullets, self.bullet_img, player_desc["is_player"], player_desc["squad"], None, player_desc["player_name"]) for player_desc in query["player_set"]]
+                            for player in self.players:
+                                player.last_update = time()
                         elif "player_index" in query:
                             self.spectator_index = query["player_index"]
                             #self.spectating = True
@@ -504,6 +506,7 @@ class ShapeRoyale:
                             if query["powerup_set"]["stage"] == 1:
                                 self.powerups = self.generate_powerups(query["powerup_set"]["seed"])
                             else:
+                                self.NUM_POWERUPS = self.NUM_POWERUP_SECTIONS * 10
                                 self.powerups.extend(self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
 
             elif self.server is not None:
@@ -557,6 +560,13 @@ class ShapeRoyale:
                     if event.key == pg.K_RETURN:
                         if self.end_screen is not None:
                             self.__init__(self.screen)
+
+            num_powerups = len(self.powerups)
+            num_powerups_in_sec = 0
+            for y in self.powerup_grid:
+                num_powerups_in_sec += len(y)
+
+            print(num_powerups, num_powerups_in_sec)
 
             self.anim_manager.update(dt)
             self.safezone.update(dt)

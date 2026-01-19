@@ -123,7 +123,7 @@ class Shape:
         self.num_rare_picked = 0
         self.num_legendary_picked = 0
 
-        self.last_update = 0
+        self.last_update = time()
 
     @property
     def global_rect(self) -> pg.Rect: return pg.Rect(self.x - self.rotated_shape_image.width * 0.5, self.y - self.rotated_shape_image.height * 0.5, self.rotated_shape_image.width, self.rotated_shape_image.height)
