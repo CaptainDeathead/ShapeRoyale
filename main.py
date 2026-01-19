@@ -377,10 +377,11 @@ class ShapeRoyale:
         if self.server is not None:
             player_data = [player.to_dict() for player in self.players]
             for i, client in enumerate(self.server.clients):
-                client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
-                client.send({"answer": {"player_set": player_data}})
-                #client.send({"answer": {"player_set": True}})
-                client.send({"answer": {"player_index": i+1}})
+                for i in range(10):
+                    client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
+                    client.send({"answer": {"player_set": player_data}})
+                    #client.send({"answer": {"player_set": True}})
+                    client.send({"answer": {"player_index": i+1}})
 
         if self.client is not None:
             done = False

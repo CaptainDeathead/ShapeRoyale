@@ -83,6 +83,7 @@ class MainMenu:
         if timer_time <= 1:
             if self.server is not None:
                 self.server.sendall({"question": "send_starting_info"})
+
             if self.client is not None:
                 server_ready = False
                 while not server_ready:
@@ -101,6 +102,7 @@ class MainMenu:
 
                     self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
+                    #print("waiting for data stream")
                     for message in self.client.base_client.data_stream:
                         for dtype, query in message.items():
                             if dtype == "question" and query == "send_starting_info":
