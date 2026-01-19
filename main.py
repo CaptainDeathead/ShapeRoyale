@@ -271,8 +271,22 @@ class ShapeRoyale:
         self.server = Server(sys.argv[2], int(sys.argv[3]))
 
     def join_server(self) -> None:
+        self.screen.fill((0, 0, 0))
+        loading_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("Connecting to server...", True, (255, 255, 255))
+        self.screen.blit(loading_lbl, (self.WIDTH // 2 - loading_lbl.width // 2, self.HEIGHT // 2 - loading_lbl.height // 2))
+
         self.client = Client(sys.argv[2], int(sys.argv[3]))
-        self.client.connect()
+        connected = False
+        while not connected:
+            pg.display.flip()
+
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit(0)
+
+            connected = self.client.connect(max_retries=1)
+
         self.player_name = sys.argv[4]
 
     def generate_safezone_phases(self, num_phases: int) -> None:

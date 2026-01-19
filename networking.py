@@ -2,6 +2,7 @@ import json
 import socket
 import zlib
 
+from time import sleep
 from threading import Thread
 from typing import Generator
 
@@ -14,6 +15,8 @@ class BaseClient:
 
         self.dead = False
         self.raw_data_stream = []
+
+        self.disconnect_on_fail = not self.is_client
 
         if is_client:
             self.recv_thread = Thread(target=self.poll_recv, daemon=True)
@@ -29,8 +32,10 @@ class BaseClient:
         print(f"Disconnecting client {self.addr}.")
 
         self.dead = True
-        #self.conn.close()
-        self.recv_thread.join()
+        try:
+            self.recv_thread.join()
+        except Exception as e:
+            print(f"BaseClient - Error while joining recv_thread! {e}.")
 
     def poll_recv(self) -> None:
         while 1:
@@ -63,6 +68,11 @@ class BaseClient:
 
         try:
             json_data = json.loads(data)
+
+            if json_data.get("question") == "hello?":
+                print("Sent init.")
+                self.send({"answer": "hi"})
+                return
             #jif json_data.get("to", self.sockname) != self.sockname:
             #    return {}
 
@@ -83,7 +93,8 @@ class BaseClient:
                 self.conn.recv(99999)
             except Exception as e1:
                 print(f"BaseClient - Error while clearing buffer due to error! {e1}. Assuming this connection is dead.")
-                self.disconnect()
+                if self.disconnect_on_fail:
+                    self.disconnect()
                 return {}
 
         try:
@@ -94,8 +105,10 @@ class BaseClient:
                 self.conn.recv(4096)
             except Exception as e1:
                 print(f"BaseClient - Error while clearing buffer due to error! {e1}. Assuming this connection is dead.")
-                self.disconnect()
+                if self.disconnect_on_fail:
+                    self.disconnect()
                 return {}
+            return {}
 
         data = raw_data.decode()
         #print(data)
@@ -107,7 +120,8 @@ class BaseClient:
 
         except Exception as e:
             print(f"BaseClient - Error while loading json data! {e}. Assuming the server disconnected (connection dead).")
-            self.disconnect()
+            if self.disconnect_on_fail:
+                self.disconnect()
             return {}
 
         return json_data
@@ -140,13 +154,28 @@ class Client:
 
         return self.base_client.recv
 
-    def connect(self) -> None:
-        print("Connecting...")
-        self.sock.connect((self.HOST, self.PORT))
-        self.base_client = BaseClient(self.sock, (self.HOST, self.PORT), True)
-        self.base_client.send({"question": "hello?"})
-        print("Connected successfully!")
+    def connect(self, max_retries: bool = 3) -> bool:
+        curr_try = 0
+            
+        if self.base_client is None:
+            self.base_client = BaseClient(self.sock, (self.HOST, self.PORT), True)
 
+        while curr_try < max_retries:
+            curr_try += 1
+            print("Connecting...")
+            self.sock.connect((self.HOST, self.PORT))
+            self.base_client.send({"question": "hello?"})
+
+            sleep(1)
+
+            for message in self.base_client.data_stream:
+                for dtype, query in message.items():
+                    if dtype == "answer" and query == "hi":
+                        print("Connected successfully!")
+                        self.disconnect_on_fail = True
+                        return True
+
+        return False
 class Server:
     def __init__(self, host: str, port: int) -> None:
         self.HOST = host
