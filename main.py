@@ -12,7 +12,7 @@ from utils import AnimManager, FONTS_PATH
 
 from networking import Server, Client, BaseClient
 
-from time import time
+from time import time, sleep
 from json import loads
 from math import dist, sqrt, floor, ceil
 from random import randint, choice, uniform, Random, randrange
@@ -377,11 +377,10 @@ class ShapeRoyale:
         if self.server is not None:
             player_data = [player.to_dict() for player in self.players]
             for i, client in enumerate(self.server.clients):
-                for i in range(10):
-                    client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
-                    client.send({"answer": {"player_set": player_data}})
+                client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
+                client.send({"answer": {"player_set": player_data}})
                     #client.send({"answer": {"player_set": True}})
-                    client.send({"answer": {"player_index": i+1}})
+                client.send({"answer": {"player_index": i+1}})
 
         if self.client is not None:
             done = False
@@ -401,9 +400,13 @@ class ShapeRoyale:
                             self.players = [Shape(self.MAP_SIZE, player_desc["x"], player_desc["y"], player_desc["index"], player_desc["shape_name"], self.shape_info, self.shape_images[f"{player_desc["shape_name"]}Friendly"], self.shape_images[f"{player_desc["shape_name"]}Enemy"], self.bullets, self.bullet_img, player_desc["is_player"], player_desc["squad"], None, player_desc["player_name"]) for player_desc in query["player_set"]]
                             for player in self.players:
                                 player.last_update = time()
+
                         elif "player_index" in query:
                             self.spectator_index = query["player_index"]
                             #self.spectating = True
+
+                        if self.players == []:
+                            self.client.send({"question": "player_set"})
 
                         if self.powerups != [] and self.players != [] and self.spectator_index != 0: done = True
                 
@@ -528,30 +531,33 @@ class ShapeRoyale:
                 for client in self.server.clients:
                     for message in client.data_stream:
                         for dtype, query in message.items():
-                            if dtype != "answer":
-                                continue
+                            if dtype == "answer":
+                                if "player_pos_update" in query:
+                                    update = query["player_pos_update"]
+                                    target_player = None
+                                    for player in self.players:
+                                        if player.index == update["index"]:
+                                            target_player = player
+                                            break
 
-                            if "player_pos_update" in query:
-                                update = query["player_pos_update"]
-                                target_player = None
-                                for player in self.players:
-                                    if player.index == update["index"]:
-                                        target_player = player
-                                        break
+                                    if target_player is not None:
+                                        for key, value in update.items():
+                                            setattr(target_player, key, value)
 
-                                if target_player is not None:
-                                    for key, value in update.items():
-                                        setattr(target_player, key, value)
+                                elif "player_shoot" in query:
+                                    target_player = None
+                                    for player in self.players:
+                                        if player.index == query["player_shoot"]["index"]:
+                                            target_player = player
+                                            break
+                                    
+                                    if target_player is not None:
+                                        target_player.shoot()
 
-                            elif "player_shoot" in query:
-                                target_player = None
-                                for player in self.players:
-                                    if player.index == query["player_shoot"]["index"]:
-                                        target_player = player
-                                        break
-                                
-                                if target_player is not None:
-                                    target_player.shoot()
+                            else:
+                                if "player_set" in query:
+                                    player_data = [player.to_dict() for player in self.players]
+                                    client.send({"answer": {"player_set": player_data}})
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
