@@ -156,11 +156,11 @@ class ShapeRoyale:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
 
         info = pg.display.get_desktop_sizes()[0]
-        self.WIDTH = info[0]
-        self.HEIGHT = info[1]
+        self.WIDTH = min(info[0], 1920)
+        self.HEIGHT = min(info[1], 1080)
         
         if display_surf is None:
-            self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN, display=0)
+            self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT), pg.SRCALPHA | pg.FULLSCREEN | pg.SCALED, display=0)
         else:
             self.screen = display_surf
 

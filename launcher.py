@@ -9,6 +9,14 @@ class UIManager:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
 
+    def character_limit(self, entry: tk.Entry, limit: int) -> None:
+        char_count = len(entry.get())
+
+        overlap = char_count - limit
+
+        if overlap > 0:
+            entry.delete(char_count - overlap, tk.END)
+
     def Heading(self, text: str) -> None:
         heading = ttk.Label(self.root, text=text, font=("Segoe UI", 18, "bold"))
         heading.pack(pady=(10, 5))
@@ -28,7 +36,7 @@ class UIManager:
         checkbox = ttk.Checkbutton(line1, variable=variable)
         checkbox.pack(side='left', padx=(10, 0))
 
-    def TextInput(self, heading: str, initial_value: str, disabled: bool = False) -> object:
+    def TextInput(self, heading: str, initial_value: str, disabled: bool = False, limit: int = 0) -> object:
         """Returns the function to get the value in the text entry"""
 
         line2 = ttk.Frame(self.root)
@@ -47,6 +55,9 @@ class UIManager:
 
         entry.insert(0, initial_value)
         entry.configure(state=state)
+
+        if limit > 0:
+            entry.bind("<KeyRelease>", lambda x: self.character_limit(entry, limit))
 
         return entry.get
 
@@ -130,7 +141,7 @@ class Launcher:
     def construct(self) -> None:
         self.ui_mgr.Heading("SHAPE ROYALE (PRE-ALPHA)")
 
-        self.get_name = self.ui_mgr.TextInput("NAME:", "player")
+        self.get_name = self.ui_mgr.TextInput("NAME:", "player", limit=25)
 
         self.ui_mgr.Subheading("\nMULTIPLAYER")
 
