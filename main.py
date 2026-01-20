@@ -242,7 +242,7 @@ class ShapeRoyale:
         }
         self.sounds["hitHurt"].set_volume(0.70)
         self.sounds["laserShoot"].set_volume(0.70)
-        self.sounds["powerUp"].set_volume(0.70)
+        self.sounds["powerUp"].set_volume(0.50)
 
         self.powerup_sections = [(i*self.POWERUP_SECTION_SIZE, (i+1)*self.POWERUP_SECTION_SIZE) for i in range(self.NUM_POWERUP_SECTIONS)]
         self.powerup_section_index = 0
@@ -852,6 +852,10 @@ class ShapeRoyale:
             #self.spectator_player = self.player
 
             if self.end_screen is not None and dt_mut < 0.10:
+                if self.server is not None:
+                    self.server.shutdown()
+                    self.server = None
+
                 self.end_screen.draw()
 
             pg.display.flip()

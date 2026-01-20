@@ -229,6 +229,9 @@ class Server:
             self.handle_client(conn, addr)
 
     def shutdown(self) -> None:
+        for client in self.clients:
+            client.conn.close()
+
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except Exception as e:
