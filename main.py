@@ -181,11 +181,11 @@ class ShapeRoyale:
 
         self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
 
-        real_player_info = [(self.main_menu.player.shape_index, self.player_name, None)]
+        real_player_info = {0: (self.main_menu.player.shape_index, self.player_name, None)}
 
         if self.server is not None:
             while len(real_player_info)-1 != len(self.server.clients):
-                for client in self.server.clients:
+                for i, client in enumerate(self.server.clients):
                     for message in client.data_stream:
                         for dtype, query in message.items():
                             if dtype != "answer" or "send_starting_info" not in query:
@@ -195,7 +195,7 @@ class ShapeRoyale:
                             if len(player_name) > 25:
                                 player_name = player_name[:25]
 
-                            real_player_info.append((query["send_starting_info"]["shape_index"], player_name, client))
+                            real_player_info[i+1] = (query["send_starting_info"]["shape_index"], player_name, client)
 
         self.clock = pg.time.Clock()
 
@@ -326,7 +326,7 @@ class ShapeRoyale:
     def generate_players(self, real_player_info: List[tuple[int, str, Client | None]]) -> List[Shape]:
         shapes = []
 
-        for i, (shape_index, name, client) in enumerate(real_player_info):
+        for i, (shape_index, name, client) in dict(sorted(real_player_info.items(), key=lambda item: item[0])).items():
             print(shape_index, name, client)
             shape_type = self.shape_names[shape_index]
             new_shape = Shape(
