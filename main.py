@@ -199,19 +199,19 @@ class ShapeRoyale:
 
         self.clock = pg.time.Clock()
 
-        self.bullet_img = pg.transform.smoothscale(pg.image.load("../ShapeRoyale/Data/assets/Bullet_Sprite.png").convert_alpha(), (10, 10))
+        self.bullet_img = pg.transform.smoothscale(pg.image.load("./Data/assets/Bullet_Sprite.png").convert_alpha(), (10, 10))
 
         self.generate_safezone_phases(self.NUM_PHASES)
         self.safezone = Safezone(self.screen.width, self.screen.height, self.MAP_SIZE_X, self.MAP_SIZE_Y, self.phase_config)
 
         self.shape_names = ["Square", "Triangle", "Circle"]
         self.shape_images = {
-            "SquareFriendly": pg.transform.smoothscale_by(pg.image.load("../ShapeRoyale/Data/assets/Square_Sprite_Player.png"), 0.1).convert_alpha(),
-            "SquareEnemy": pg.transform.smoothscale_by(pg.image.load("../ShapeRoyale/Data/assets/Square_Sprite_Enemy.png"), 0.1).convert_alpha(),
-            "TriangleFriendly": pg.transform.smoothscale_by(pg.image.load("../ShapeRoyale/Data/assets/Triangle_Sprite_Player.png"), 0.1).convert_alpha(),
-            "TriangleEnemy": pg.transform.smoothscale_by(pg.image.load("../ShapeRoyale/Data/assets/Triangle_Sprite_Enemy.png"), 0.1).convert_alpha(),
-            "CircleFriendly": pg.transform.smoothscale_by(pg.image.load("../ShapeRoyale/Data/assets/Circle_Sprite_Player.png"), 0.1).convert_alpha(),
-            "CircleEnemy": pg.transform.smoothscale_by(pg.image.load("../ShapeRoyale/Data/assets/Circle_Sprite_Enemy.png"), 0.1).convert_alpha()
+            "SquareFriendly": pg.transform.smoothscale(pg.image.load("./Data/assets/Square_Sprite_Player.png"), (100, 100)).convert_alpha(),
+            "SquareEnemy": pg.transform.smoothscale(pg.image.load("./Data/assets/Square_Sprite_Enemy.png"), (100, 100)).convert_alpha(),
+            "TriangleFriendly": pg.transform.smoothscale(pg.image.load("./Data/assets/Triangle_Sprite_Player.png"), (100, 100)).convert_alpha(),
+            "TriangleEnemy": pg.transform.smoothscale(pg.image.load("./Data/assets/Triangle_Sprite_Enemy.png"), (100, 100)).convert_alpha(),
+            "CircleFriendly": pg.transform.smoothscale(pg.image.load("./Data/assets/Circle_Sprite_Player.png"), (100, 100)).convert_alpha(),
+            "CircleEnemy": pg.transform.smoothscale(pg.image.load("./Data/assets/Circle_Sprite_Enemy.png"), (100, 100)).convert_alpha()
         }
         
         with open("../ShapeRoyale/Data/shapes.json", "r") as f:
@@ -236,9 +236,9 @@ class ShapeRoyale:
             self.powerups = self.generate_powerups(self.powerup_stage_1_seed)
 
         self.sounds = {
-            "hitHurt": pg.Sound("../ShapeRoyale/Data/assets/Sounds/hitHurt.wav"),
-            "laserShoot": pg.Sound("../ShapeRoyale/Data/assets/Sounds/laserShoot.wav"),
-            "powerUp": pg.Sound("../ShapeRoyale/Data/assets/Sounds/powerUp.wav"),
+            "hitHurt": pg.Sound("./Data/assets/Sounds/hitHurt.wav"),
+            "laserShoot": pg.Sound("./Data/assets/Sounds/laserShoot.wav"),
+            "powerUp": pg.Sound("./Data/assets/Sounds/powerUp.wav"),
         }
         self.sounds["hitHurt"].set_volume(0.70)
         self.sounds["laserShoot"].set_volume(0.70)

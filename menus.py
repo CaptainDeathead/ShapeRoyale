@@ -48,14 +48,14 @@ class MainMenu:
         self.timer_end_lbls = [self.fonts["medium"].render(f"                 {i}", True, (0, 0, 255)) for i in range(1, self.TIMER_LENGTH + 1)]
 
         self.shape_images = [
-            pg.image.load("../ShapeRoyale/Data/assets/Square_Sprite_Player.png").convert_alpha(),
-            pg.image.load("../ShapeRoyale/Data/assets/Triangle_Sprite_Player.png").convert_alpha(),
-            pg.image.load("../ShapeRoyale/Data/assets/Circle_Sprite_Player.png").convert_alpha()
+            pg.transform.smoothscale(pg.image.load("./Data/assets/Square_Sprite_Player.png"), (1000, 1000)).convert_alpha(),
+            pg.transform.smoothscale(pg.image.load("./Data/assets/Triangle_Sprite_Player.png"), (1000, 1000)).convert_alpha(),
+            pg.transform.smoothscale(pg.image.load("./Data/assets/Circle_Sprite_Player.png"), (1000, 1000)).convert_alpha()
         ]
 
         self.shape_names = ("Square", "Triangle", "Circle")
 
-        with open("../ShapeRoyale/Data/shapes.json", "r") as f:
+        with open("./Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
 
         if self.server is not None:
@@ -195,10 +195,10 @@ class MainMenu:
                     elif event.key == pg.K_LEFT:
                         self.player.shape_index -= 1
                         if self.player.shape_index < 0:
-                            self.player.shape_index = 2
+                            self.player.shape_index = len(self.shape_names)
                     elif event.key == pg.K_RIGHT:
                         self.player.shape_index += 1
-                        if self.player.shape_index > 2:
+                        if self.player.shape_index > len(self.shape_names):
                             self.player.shape_index = 0
 
             self.draw_player_cards()
