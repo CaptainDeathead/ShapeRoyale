@@ -181,7 +181,7 @@ class ShapeRoyale:
 
         self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
 
-        real_player_info = {0: (self.main_menu.player.shape_index, self.player_name, None)}
+        real_player_info = {0: (self.main_menu.player.shape_index, self.main_menu.player_name, None)}
 
         if self.server is not None:
             while len(real_player_info)-1 != len(self.server.clients):

@@ -1,4 +1,5 @@
 import pygame as pg
+import pygame_gui
 import sys
 
 #from sound import generate_sine_wave
@@ -21,6 +22,7 @@ class MainMenu:
         self.player_name = player_name
 
         self.clock = pg.time.Clock()
+        self.manager = pygame_gui.UIManager((display_surf.width, display_surf.height), 'UI/Themes/mainmenu.json')
 
         self.player = Player()
 
@@ -37,6 +39,8 @@ class MainMenu:
 
         self.info_lbl = self.fonts["medium"].render   ("Press Enter to ready / unready...", True, (255, 255, 255))
         self.info_lbl.blit(self.fonts["medium"].render("      Enter", True, (0, 255, 0)))
+
+        self.name_entry = None
 
         self.timer_active = False
         self.timer_start_time = time()
@@ -79,6 +83,9 @@ class MainMenu:
         self.timer_active = True
 
         if timer_time <= 1:
+            if self.name_entry is not None:
+                self.player_name = self.name_entry.get_text()
+
             if self.server is not None:
                 self.server.sendall({"question": "send_starting_info"})
 
@@ -126,8 +133,17 @@ class MainMenu:
 
         x = start_x + (card_w + pad_w)
 
-        name_lbl = self.fonts["medium"].render(self.player_name, True, (255, 255, 255))
-        self.display_surf.blit(name_lbl, (x + card_w // 2 - name_lbl.width // 2, card_y - 70))
+        #name_bg = None
+
+        #font_width, font_height = self.fonts["medium"].size(self.player_name)
+        #if pg.Rect(x + card_w // 2 - font_width // 2, card_y - 70, font_width, font_height).collidepoint(pg.mouse.get_pos()):
+        #    name_bg = (100, 100, 100)
+
+        #name_lbl = self.fonts["medium"].render(self.player_name, True, (255, 255, 255), name_bg)
+        #self.display_surf.blit(name_lbl, (x + card_w // 2 - name_lbl.width // 2, card_y - 70))
+        if self.name_entry is None:
+            self.name_entry = pygame_gui.elements.ui_text_entry_line.UITextEntryLine(pg.Rect(x, card_y - 80, card_w, 45), initial_text=self.player_name, manager=self.manager, object_id=pygame_gui.core.ObjectID(object_id="#name_entry"))
+            self.name_entry.set_text_length_limit(20)
 
         pg.draw.line(self.display_surf, self.player.ready_color, (x + card_w // 2 - ready_line_w // 2, card_y - 20), (x + card_w // 2 + ready_line_w // 2, card_y - 20), 5)
 
@@ -179,7 +195,7 @@ class MainMenu:
     def main(self) -> None:
         while not self.start_game:
             self.display_surf.fill((0, 0, 0))
-            self.clock.tick(60)
+            dt = self.clock.tick(60) / 1000.0
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -198,8 +214,10 @@ class MainMenu:
                             self.player.shape_index = len(self.shape_names)
                     elif event.key == pg.K_RIGHT:
                         self.player.shape_index += 1
-                        if self.player.shape_index > len(self.shape_names):
+                        if self.player.shape_index >= len(self.shape_names):
                             self.player.shape_index = 0
+
+                self.manager.process_events(event)
 
             self.draw_player_cards()
 
@@ -245,6 +263,9 @@ class MainMenu:
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
             self.check_game_start()
+
+            self.manager.update(dt)
+            self.manager.draw_ui(self.display_surf)
 
             pg.display.flip()
 
