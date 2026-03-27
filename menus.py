@@ -211,7 +211,7 @@ class MainMenu:
                     elif event.key == pg.K_LEFT:
                         self.player.shape_index -= 1
                         if self.player.shape_index < 0:
-                            self.player.shape_index = len(self.shape_names)
+                            self.player.shape_index = len(self.shape_names) - 1
                     elif event.key == pg.K_RIGHT:
                         self.player.shape_index += 1
                         if self.player.shape_index >= len(self.shape_names):
