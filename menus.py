@@ -262,7 +262,7 @@ class EndScreen:
         self.medium_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 30)
         self.small_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 20)
 
-        self.winner_lbl = self.large_font.render(f"Winner: {self.winner.shape_name}", True, (255, 255, 255))
+        self.winner_lbl = self.large_font.render(f"Winner: {self.winner.player_name}", True, (255, 255, 255))
         
         self.winner_sprite = pg.transform.smoothscale(self.winner.shape_image, (300, 300))
         if winner != self.my_player:
