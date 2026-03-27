@@ -21,5 +21,53 @@
         {
             "text_horiz_alignment": "center"
         }
+    },
+
+    "#multiplayer_btn_red":
+    {
+        "colors":
+        {
+            "normal_bg": "#AA0000",
+            "hovered_bg": "#880000"
+        },
+        "font":
+        {
+            "name": "PressStart2P",
+            "size": 32,
+            "regular_resource":
+            {
+                "package": "UI.Fonts",
+                "resource": "PressStart2P.ttf"
+            }
+        },
+        "misc":
+        {
+            "shape": "rounded_rectangle",
+            "shape_corner_radius": "20"
+        }
+    },
+    "#multiplayer_btn_green":
+    {
+        "colors":
+        {
+            "normal_bg": "#00FF00",
+            "hovered_bg": "#00FF00",
+            "normal_text": "#FFFFFF"
+        },
+        "font":
+        {
+            "name": "PressStart2P",
+            "size": 32,
+            "regular_resource":
+            {
+                "package": "UI.Fonts",
+                "resource": "PressStart2P.ttf"
+            }
+        },
+        "misc":
+        {
+            "shape": "rounded_rectangle",
+            "shape_corner_radius": "20"
+        }
     }
 }

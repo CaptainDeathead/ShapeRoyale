@@ -59,6 +59,16 @@ class MainMenu:
 
         self.shape_names = ("Square", "Triangle", "Circle")
 
+        self.server_ip = None
+        self.server_port = None
+        self.singleplayer = self.client is None and self.server is None
+
+        half_width = self.display_surf.width // 2
+        self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 200), {"Server IP":"short_text", "Server Port":"integer"}, visible=0)
+
+        object_id = "#multiplayer_btn_red" if self.client is None and self.server is None else "#multiplayer_btn_green"
+        self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 150, display_surf.height - 250, 300, 75), "Multiplayer", self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
+
         with open("./Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
 
@@ -92,7 +102,7 @@ class MainMenu:
             if self.client is not None:
                 server_ready = False
                 while not server_ready:
-                    self.clock.tick(60)
+                    dt = self.clock.tick(60) / 1000.0
 
                     pg.display.flip()
                     for event in pg.event.get():
@@ -106,7 +116,10 @@ class MainMenu:
                         elif event.type == pg.KEYDOWN:
                             if event.key == pg.K_RETURN:
                                 self.player.ready = not self.player.ready
+                                self.name_entry.enable()
                                 return
+
+                        self.manager.process_events(event)
 
                     self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
@@ -116,6 +129,9 @@ class MainMenu:
                             if dtype == "question" and query == "send_starting_info":
                                 self.client.send({"answer": {"send_starting_info": {"shape_index": self.player.shape_index, "name": self.player_name}}})
                                 server_ready = True
+
+                    self.manager.update(dt)
+                    self.manager.draw_ui(self.display_surf)
 
             self.start_game = True
 
@@ -127,7 +143,7 @@ class MainMenu:
         cards_w = card_w * 3 + pad_w * 2
         start_x = self.width // 2 - cards_w // 2
 
-        card_y = 350
+        card_y = 250
 
         ready_line_w = 120
 
@@ -208,6 +224,7 @@ class MainMenu:
                 elif event.type == pg.KEYDOWN:
                     if event.key == pg.K_RETURN:
                         self.player.ready = not self.player.ready
+                        self.name_entry.disable()
                     elif event.key == pg.K_LEFT:
                         self.player.shape_index -= 1
                         if self.player.shape_index < 0:
@@ -217,11 +234,26 @@ class MainMenu:
                         if self.player.shape_index >= len(self.shape_names):
                             self.player.shape_index = 0
 
+                elif event.type == pygame_gui.UI_FORM_SUBMITTED:
+                    if event.ui_element == self.config_box:
+                        values = self.config_box.get_current_values()
+                        self.server_ip = values["Server IP"]
+                        self.server_port = int(values["Server Port"])
+
+                        self.config_box.hide()
+                        self.singleplayer = False
+                        return
+
+                elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == self.multiplayer_btn:
+                        if "#multiplayer_btn_red" in self.multiplayer_btn.get_object_ids():
+                            self.config_box.show()
+
                 self.manager.process_events(event)
 
             self.draw_player_cards()
 
-            self.display_surf.blit(self.title_lbl, (self.width // 2 - self.title_lbl.width // 2, 100))
+            self.display_surf.blit(self.title_lbl, (self.width // 2 - self.title_lbl.width // 2, 50))
 
             if self.timer_active:
                 timer_time = self.TIMER_LENGTH - (time() - self.timer_start_time)
@@ -235,11 +267,11 @@ class MainMenu:
 
                     self.last_timer_time = int(round(timer_time, 0))
 
-                curr_time_int = max(0, min(int(round(timer_time, 0)), len(self.timer_end_lbls) - 1))
-                self.display_surf.blit(self.timer_start_lbl, (self.width // 2 - self.timer_start_lbl.width // 2, self.height - 150))
-                self.display_surf.blit(self.timer_end_lbls[curr_time_int-1], (self.width // 2 - self.timer_start_lbl.width // 2, self.height - 150))
+                #curr_time_int = max(0, min(int(round(timer_time, 0)), len(self.timer_end_lbls) - 1))
+                #self.display_surf.blit(self.timer_start_lbl, (self.width // 2 - self.timer_start_lbl.width // 2, self.height - 150))
+                #self.display_surf.blit(self.timer_end_lbls[curr_time_int-1], (self.width // 2 - self.timer_start_lbl.width // 2, self.height - 150))
             else:
-                self.display_surf.blit(self.info_lbl, (self.width // 2 - self.info_lbl.width // 2, self.height - 150))
+                self.display_surf.blit(self.info_lbl, (self.width // 2 - self.info_lbl.width // 2, self.height - 100))
 
             if self.server is not None:
                 for i, player_info in self.player_info.items():

@@ -151,7 +151,7 @@ class ShapeRoyale:
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
-    def __init__(self, display_surf: pg.Surface | None = None) -> None:
+    def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None) -> None:
         if not (self.NUM_POWERUPS / self.NUM_POWERUP_SECTIONS).is_integer() or self.NUM_POWERUPS % self.NUM_POWERUP_SECTIONS != 0:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
 
@@ -170,6 +170,9 @@ class ShapeRoyale:
         self.client = None
         self.player_name = "player"
 
+        if client is not None:
+            self.join_server(client.HOST, client.PORT, self.player_name) # Client will be dead so we reset
+
         if len(sys.argv) > 1:
             if sys.argv[1] == "host":
                 self.host_server()
@@ -180,6 +183,10 @@ class ShapeRoyale:
             self.player_name = sys.argv[3]
 
         self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+
+        if not self.main_menu.singleplayer and self.server is None and self.client is None:
+            self.join_server(self.main_menu.server_ip, self.main_menu.server_port, self.main_menu.player_name)
+            self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
 
         real_player_info = {0: (self.main_menu.player.shape_index, self.main_menu.player_name, None)}
 
@@ -275,12 +282,12 @@ class ShapeRoyale:
     def host_server(self) -> None:
         self.server = Server(sys.argv[2], int(sys.argv[3]))
 
-    def join_server(self) -> None:
+    def join_server(self, ip: str, port: int, name: str) -> Client:
         self.screen.fill((0, 0, 0))
         loading_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("Connecting to server...", True, (255, 255, 255))
         self.screen.blit(loading_lbl, (self.WIDTH // 2 - loading_lbl.width // 2, self.HEIGHT // 2 - loading_lbl.height // 2))
 
-        self.client = Client(sys.argv[2], int(sys.argv[3]))
+        self.client = Client(ip, port)
         connected = False
         while not connected:
             pg.display.flip()
@@ -292,7 +299,9 @@ class ShapeRoyale:
 
             connected = self.client.connect(max_retries=1)
 
-        self.player_name = sys.argv[4]
+        self.player_name = name
+
+        return self.client
 
     def generate_safezone_phases(self, num_phases: int) -> None:
         phase_config = {}
@@ -591,7 +600,7 @@ class ShapeRoyale:
                     #        self.player.showing_powerup_popup = False
                     if event.key == pg.K_RETURN:
                         if self.end_screen is not None:
-                            self.__init__(self.screen)
+                            self.__init__(self.screen, self.client)
 
             num_powerups = len(self.powerups)
             num_powerups_in_sec = 0
