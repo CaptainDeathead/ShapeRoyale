@@ -71,7 +71,9 @@ class Shape:
         self.squad = squad
         self.client = client
         self.player_name = player_name
-        self.squad.append(self)
+
+        if len(self.squad) == 0:
+            self.squad.append(self)
 
         self.dead = False
 

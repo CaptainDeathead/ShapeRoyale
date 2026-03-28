@@ -291,24 +291,24 @@ class ShapeRoyale:
         except:
             return self.players[0]
 
+    def get_player(self, player_index: int) -> Shape | None:
+        for player in self.players:
+            if player.index == player_index:
+                return player
+        
+        for player in self.dead_players:
+            if player.index == player_index:
+                return player
+
+        return None
+
     def player_lb_info(self, player: Shape) -> Dict[str, any]:
         ret_dict = player.to_dict()
         ret_dict.update(player.to_winner_dict())
 
         squad = []
         for index in ret_dict["squad"]:
-            found_name = False
-            for player in self.players:
-                if player.index == index:
-                    squad.append(player.player_name)
-                    found_name = True
-                    break
-
-            if found_name: continue
-            for player in self.dead_players:
-                if player.index == index:
-                    squad.append(player.player_name)
-                    break
+            squad.append(self.get_player(index).player_name)
 
         ret_dict["squad"] = squad
 
@@ -449,6 +449,7 @@ class ShapeRoyale:
                             self.players = [Shape(self.MAP_SIZE, player_desc["x"], player_desc["y"], player_desc["index"], player_desc["shape_name"], self.shape_info, self.shape_images[f"{player_desc["shape_name"]}Friendly"], self.shape_images[f"{player_desc["shape_name"]}Enemy"], self.bullets, self.bullet_img, player_desc["is_player"], player_desc["squad"], None, player_desc["player_name"]) for player_desc in query["player_set"]]
                             for player in self.players:
                                 player.last_update = time()
+                                player.squad = [self.get_player(squad_member) for squad_member in player.squad]
 
                         elif "player_index" in query:
                             self.spectator_index = query["player_index"]
@@ -531,6 +532,7 @@ class ShapeRoyale:
                                 #    self.spectator_index -= 1
 
                                 self.players.remove(target_player)
+                                self.dead_players.append(target_player)
 
                         if "set_bullets" in query:
                             update = query["set_bullets"]
@@ -880,7 +882,7 @@ class ShapeRoyale:
             pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, 0, 200, (self.safezone.top_wall - self.HEIGHT / 2) / self.MAP_SIZE * 200))
             pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, (self.safezone.bottom_wall + self.HEIGHT / 2) / self.MAP_SIZE * 200, 200, 200))
 
-            pg.draw.rect(self.minimap_surf, (0, 0, 255), (self.player.x / self.MAP_SIZE * 200 - 1, self.player.y / self.MAP_SIZE * 200 - 1, 2, 2))
+            pg.draw.rect(self.minimap_surf, (0, 0, 255), (self.player.x / self.MAP_SIZE * 200 - 3, self.player.y / self.MAP_SIZE * 200 - 3, 6, 6))
 
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
