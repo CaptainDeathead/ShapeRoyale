@@ -262,9 +262,9 @@ class ShapeRoyale:
             self.powerups = self.generate_powerups(self.powerup_stage_1_seed)
 
         self.sounds = {
-            "hitHurt": pg.Sound("./Data/assets/Sounds/hitHurt.wav"),
-            "laserShoot": pg.Sound("./Data/assets/Sounds/laserShoot.wav"),
-            "powerUp": pg.Sound("./Data/assets/Sounds/powerUp.wav"),
+            "hitHurt": pg.Sound("./Data/assets/Sounds/hitHurt.ogg"),
+            "laserShoot": pg.Sound("./Data/assets/Sounds/laserShoot.ogg"),
+            "powerUp": pg.Sound("./Data/assets/Sounds/powerUp.ogg"),
         }
         self.sounds["hitHurt"].set_volume(0.70)
         self.sounds["laserShoot"].set_volume(0.70)

@@ -1,6 +1,7 @@
 import pygame as pg
 import pygame_gui
 import sys
+import asyncio
 
 #from sound import generate_sine_wave
 
@@ -95,14 +96,14 @@ class MainMenu:
             for i in range(len(self.server.clients)):
                 self.player_info[i] = {"ready": False, "name": "player"}
 
-        self.main()
+        #self.main()
 
     def reset_timer(self) -> None:
         self.timer_active = False
         self.timer_start_time = time()
         self.timer_first_beep = True
 
-    def check_game_start(self) -> None:
+    async def check_game_start(self) -> None:
         if not self.player.ready:
             self.reset_timer()
             return
@@ -121,6 +122,7 @@ class MainMenu:
                 server_ready = False
                 while not server_ready:
                     dt = self.clock.tick(60) / 1000.0
+                    await asyncio.sleep(0)
 
                     pg.display.flip()
                     for event in pg.event.get():
@@ -226,10 +228,11 @@ class MainMenu:
             self.display_surf.blit(shape_info_lbl, (x + card_w // 2 - largest_width // 2, curr_y))
             curr_y += shape_info_lbl.height + 5
 
-    def main(self) -> None:
+    async def main(self) -> None:
         while not self.start_game:
             self.display_surf.fill((0, 0, 0))
             dt = self.clock.tick(60) / 1000.0
+            await asyncio.sleep(0)
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -337,7 +340,7 @@ class MainMenu:
             if self.client is not None:
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
-            self.check_game_start()
+            await self.check_game_start()
 
             self.manager.update(dt)
             self.manager.draw_ui(self.display_surf)

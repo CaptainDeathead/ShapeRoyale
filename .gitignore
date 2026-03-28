@@ -1,0 +1,4 @@
+Windows/
+Linux/
+.venv/
+__pycache__/
