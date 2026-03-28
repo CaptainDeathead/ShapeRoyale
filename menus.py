@@ -8,6 +8,7 @@ from networking import Server, Client, BaseClient
 
 from utils import FONTS_PATH
 from shape import Player, Shape
+from leaderboard import Leaderboard
 
 from json import loads
 from time import time
@@ -62,12 +63,16 @@ class MainMenu:
         self.server_ip = None
         self.server_port = None
         self.singleplayer = self.client is None and self.server is None
+        self.host = None
 
         half_width = self.display_surf.width // 2
-        self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 200), {"Server IP":"short_text", "Server Port":"integer"}, visible=0)
+        self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Server IP":"short_text", "Server Port":"integer", "Host":"boolean(default=False)"}, visible=0)
 
         object_id = "#multiplayer_btn_red" if self.client is None and self.server is None else "#multiplayer_btn_green"
         self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 150, display_surf.height - 250, 300, 75), "Multiplayer", self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
+
+        self.leaderboard = Leaderboard(self.display_surf, self.manager, [{"name": "Uninitialised"}])
+        self.leaderboard.window.hide()
 
         with open("./Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
@@ -76,6 +81,8 @@ class MainMenu:
             self.player_info = {}
             for i in range(len(self.server.clients)):
                 self.player_info[i] = {"ready": False, "name": "player"}
+        else:
+            self.player_info = {0: {"name": self.player_name}}
 
         self.main()
 
@@ -233,12 +240,20 @@ class MainMenu:
                         self.player.shape_index += 1
                         if self.player.shape_index >= len(self.shape_names):
                             self.player.shape_index = 0
+                    elif event.key == pg.K_TAB:
+                        self.leaderboard.window.hide()
+                        self.leaderboard = Leaderboard(self.display_surf, self.manager, self.player_info.values())
+                
+                elif event.type == pg.KEYUP:
+                    if event.key == pg.K_TAB:
+                        self.leaderboard.window.hide()
 
                 elif event.type == pygame_gui.UI_FORM_SUBMITTED:
                     if event.ui_element == self.config_box:
                         values = self.config_box.get_current_values()
                         self.server_ip = values["Server IP"]
                         self.server_port = int(values["Server Port"])
+                        self.host = values["Host"]
 
                         self.config_box.hide()
                         self.singleplayer = False

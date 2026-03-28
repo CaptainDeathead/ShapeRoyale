@@ -1,4 +1,5 @@
 import pygame as pg
+import pygame_gui
 import os
 import sys
 
@@ -9,6 +10,8 @@ from bullet import Bullet
 from shape import Player, Shape
 from powerups import Powerup
 from utils import AnimManager, FONTS_PATH
+
+from leaderboard import Leaderboard
 
 from networking import Server, Client, BaseClient
 
@@ -175,7 +178,7 @@ class ShapeRoyale:
 
         if len(sys.argv) > 1:
             if sys.argv[1] == "host":
-                self.host_server()
+                self.host_server(sys.argv[2], sys.argv[3])
             elif sys.argv[1] == "join":
                 self.join_server()
 
@@ -185,8 +188,14 @@ class ShapeRoyale:
         self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
 
         if not self.main_menu.singleplayer and self.server is None and self.client is None:
-            self.join_server(self.main_menu.server_ip, self.main_menu.server_port, self.main_menu.player_name)
-            self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+            if self.main_menu.host:
+                self.host_server(self.main_menu.server_ip, self.main_menu.server_port)
+                self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+            else:
+                self.join_server(self.main_menu.server_ip, self.main_menu.server_port, self.main_menu.player_name)
+                self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+
+        self.manager = pygame_gui.UIManager((self.WIDTH, self.HEIGHT))
 
         real_player_info = {0: (self.main_menu.player.shape_index, self.main_menu.player_name, None)}
 
@@ -270,6 +279,9 @@ class ShapeRoyale:
         self.end_screen = None
         self.has_done_bonus_powerups = False
 
+        #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in self.players])
+        #self.leaderboard.window.hide()
+
         self.main()
     
     @property
@@ -279,8 +291,13 @@ class ShapeRoyale:
         except:
             return self.players[0]
 
-    def host_server(self) -> None:
-        self.server = Server(sys.argv[2], int(sys.argv[3]))
+    def player_lb_info(self, player: Shape) -> Dict[str, any]:
+        ret_dict = player.to_dict()
+        ret_dict.update(player.to_winner_dict())
+        return ret_dict
+
+    def host_server(self, ip: str, port: int) -> None:
+        self.server = Server(ip, port)
 
     def join_server(self, ip: str, port: int, name: str) -> Client:
         self.screen.fill((0, 0, 0))
@@ -445,6 +462,8 @@ class ShapeRoyale:
             dt = (self.clock.tick(60) / 1000.0) * dt_mut
             dt_sum += dt
 
+            self.manager.update(dt / dt_mut)
+
             if self.client is not None:
                 for message in self.client.base_client.data_stream:
                     for dtype, query in message.items():
@@ -601,6 +620,8 @@ class ShapeRoyale:
                     if event.key == pg.K_RETURN:
                         if self.end_screen is not None:
                             self.__init__(self.screen, self.client)
+
+                self.manager.process_events(event)
 
             num_powerups = len(self.powerups)
             num_powerups_in_sec = 0
@@ -866,6 +887,8 @@ class ShapeRoyale:
                     self.server = None
 
                 self.end_screen.draw()
+
+            self.manager.draw_ui(self.screen)
 
             pg.display.flip()
 
