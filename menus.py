@@ -16,16 +16,21 @@ from time import time
 class MainMenu:
     TIMER_LENGTH = 1
 
-    def __init__(self, display_surf: pg.Surface, server: Server | None, client: Client | None, player_name: str | None = None) -> None:
+    def __init__(self, display_surf: pg.Surface, server: Server | None, client: Client | None, player_name: str | None = None, shape_index: int = 0, manager: pygame_gui.UIManager | None = None) -> None:
         self.display_surf = display_surf
         self.server = server
         self.client = client
         self.player_name = player_name
 
         self.clock = pg.time.Clock()
-        self.manager = pygame_gui.UIManager((display_surf.width, display_surf.height), 'UI/Themes/mainmenu.json')
+
+        if manager is None:
+            self.manager = pygame_gui.UIManager((display_surf.width, display_surf.height), 'UI/Themes/mainmenu.json')
+        else:
+            self.manager = manager
 
         self.player = Player()
+        self.player.shape_index = shape_index
 
         self.width = display_surf.width
         self.height = display_surf.height
@@ -64,12 +69,15 @@ class MainMenu:
         self.server_port = None
         self.singleplayer = self.client is None and self.server is None
         self.host = None
+        self.squad_size = 1
 
         half_width = self.display_surf.width // 2
         self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Server IP":"short_text", "Server Port":"integer", "Host":"boolean(default=False)"}, visible=0)
+        self.game_cfg_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Squad Size":"integer"}, visible=0)
 
         object_id = "#multiplayer_btn_red" if self.client is None and self.server is None else "#multiplayer_btn_green"
-        self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 150, display_surf.height - 250, 300, 75), "Multiplayer", self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
+        text = "Configure" if self.server is not None else "Multiplayer"
+        self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 150, display_surf.height - 250, 300, 75), text, self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
 
         self.leaderboard = Leaderboard(self.display_surf, self.manager, [{"name": "Uninitialised"}])
         self.leaderboard.window.hide()
@@ -98,7 +106,7 @@ class MainMenu:
         if not self.player.ready:
             self.reset_timer()
             return
-            
+
         timer_time = self.TIMER_LENGTH - (time() - self.timer_start_time)
         self.timer_active = True
 
@@ -262,12 +270,27 @@ class MainMenu:
 
                         self.config_box.hide()
                         self.singleplayer = False
+
+                        if self.name_entry is not None:
+                            self.player_name = self.name_entry.get_text()
                         return
+
+                    elif event.ui_element == self.game_cfg_box:
+                        values = self.game_cfg_box.get_current_values()
+                        squad_size = int(values["Squad Size"])
+
+                        if squad_size <= 0:
+                            pygame_gui.windows.UIMessageWindow(pg.Rect(self.display_surf.width // 2 - 150, self.display_surf.height // 2 - 75, 300, 150), "Enter a squad size of greater than 0.", self.manager, window_title="Error")
+                        else:
+                            self.squad_size = squad_size
+                            self.game_cfg_box.hide()
 
                 elif event.type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == self.multiplayer_btn:
                         if "#multiplayer_btn_red" in self.multiplayer_btn.get_object_ids():
                             self.config_box.show()
+                        elif self.server is not None:
+                            self.game_cfg_box.show()
 
                 self.manager.process_events(event)
 
@@ -338,7 +361,7 @@ class EndScreen:
         self.winner_lbl = self.large_font.render(f"Winner: {self.winner.player_name}", True, (255, 255, 255))
         
         self.winner_sprite = pg.transform.smoothscale(self.winner.shape_image, (300, 300))
-        if winner != self.my_player:
+        if winner not in self.my_player.squad:
             self.winner_sprite = pg.transform.smoothscale(self.winner.enemy_shape_image, (300, 300))
 
         self.powerup_stats = [self.medium_font.render(str(winner.num_common_picked), True, (255, 255, 255)),

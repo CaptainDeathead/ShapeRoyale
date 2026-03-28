@@ -154,7 +154,7 @@ class ShapeRoyale:
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
-    def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None) -> None:
+    def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None, server: Server | None = None) -> None:
         if not (self.NUM_POWERUPS / self.NUM_POWERUP_SECTIONS).is_integer() or self.NUM_POWERUPS % self.NUM_POWERUP_SECTIONS != 0:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
 
@@ -175,6 +175,8 @@ class ShapeRoyale:
 
         if client is not None:
             self.join_server(client.HOST, client.PORT, self.player_name) # Client will be dead so we reset
+        elif server is not None:
+            self.host_server(server.HOST, server.PORT) # Server will be dead so we reset
 
         if len(sys.argv) > 1:
             if sys.argv[1] == "host":
@@ -186,14 +188,17 @@ class ShapeRoyale:
             self.player_name = sys.argv[3]
 
         self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+        self.player_name = self.main_menu.player_name
 
         if not self.main_menu.singleplayer and self.server is None and self.client is None:
             if self.main_menu.host:
                 self.host_server(self.main_menu.server_ip, self.main_menu.server_port)
-                self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+                self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, self.main_menu.player.shape_index, self.main_menu.manager)
             else:
                 self.join_server(self.main_menu.server_ip, self.main_menu.server_port, self.main_menu.player_name)
-                self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+                self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, self.main_menu.player.shape_index, self.main_menu.manager)
+
+        self.squad_size = self.main_menu.squad_size
 
         self.manager = pygame_gui.UIManager((self.WIDTH, self.HEIGHT))
 
@@ -369,7 +374,9 @@ class ShapeRoyale:
 
     def generate_players(self, real_player_info: List[tuple[int, str, Client | None]]) -> List[Shape]:
         shapes = []
+        squads = []
 
+        curr_squad = []
         for i, (shape_index, name, client) in dict(sorted(real_player_info.items(), key=lambda item: item[0])).items():
             print(shape_index, name, client)
             shape_type = self.shape_names[shape_index]
@@ -377,8 +384,17 @@ class ShapeRoyale:
                 self.MAP_SIZE, randint(3000, self.MAP_SIZE_X-3000), randint(3000, self.MAP_SIZE_Y-3000), i, shape_type, self.shape_info, self.shape_images[f"{shape_type}Friendly"],
                 self.shape_images[f"{shape_type}Enemy"], self.bullets, self.bullet_img, True, [], client, name
             )
-            new_shape.squad.append(new_shape)
+
+            if len(curr_squad) > 0:
+                new_shape.x, new_shape.y = curr_squad[-1].x + 200, curr_squad[-1].y
+
+            curr_squad.append(new_shape)
+            new_shape.squad = curr_squad
             shapes.append(new_shape)
+
+            if len(curr_squad) == self.squad_size:
+                squads.append(curr_squad)
+                curr_squad = []
 
         for i in range(len(shapes), self.NUM_PLAYERS):
             name = choice(self.shape_names)
@@ -640,7 +656,7 @@ class ShapeRoyale:
                     #        self.player.showing_powerup_popup = False
                     if event.key == pg.K_RETURN:
                         if self.end_screen is not None:
-                            self.__init__(self.screen, self.client)
+                            self.__init__(self.screen, self.client, self.server)
 
                 self.manager.process_events(event)
 
@@ -728,7 +744,7 @@ class ShapeRoyale:
                     #    close_bullets.append(bullet)
                     close_bullets.append(bullet)
                     
-                    if bullet.parent == player: continue
+                    if bullet.parent in player.squad: continue
 
                     if player.global_rect.colliderect(bullet.rect):
                         if player == self.player:
@@ -883,6 +899,9 @@ class ShapeRoyale:
             pg.draw.rect(self.minimap_surf, (255, 0, 0), (0, (self.safezone.bottom_wall + self.HEIGHT / 2) / self.MAP_SIZE * 200, 200, 200))
 
             pg.draw.rect(self.minimap_surf, (0, 0, 255), (self.player.x / self.MAP_SIZE * 200 - 3, self.player.y / self.MAP_SIZE * 200 - 3, 6, 6))
+
+            for friendly in self.player.squad:
+                pg.draw.rect(self.minimap_surf, (0, 255, 0), (friendly.x / self.MAP_SIZE * 200 - 2, friendly.y / self.MAP_SIZE * 200 - 2, 3, 3))
 
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
