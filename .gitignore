@@ -2,3 +2,4 @@ Windows/
 Linux/
 .venv/
 __pycache__/
+build/
