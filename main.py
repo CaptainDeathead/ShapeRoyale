@@ -294,6 +294,24 @@ class ShapeRoyale:
     def player_lb_info(self, player: Shape) -> Dict[str, any]:
         ret_dict = player.to_dict()
         ret_dict.update(player.to_winner_dict())
+
+        squad = []
+        for index in ret_dict["squad"]:
+            found_name = False
+            for player in self.players:
+                if player.index == index:
+                    squad.append(player.player_name)
+                    found_name = True
+                    break
+
+            if found_name: continue
+            for player in self.dead_players:
+                if player.index == index:
+                    squad.append(player.player_name)
+                    break
+
+        ret_dict["squad"] = squad
+
         return ret_dict
 
     def host_server(self, ip: str, port: int) -> None:
