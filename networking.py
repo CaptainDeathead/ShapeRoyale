@@ -1,6 +1,7 @@
 import json
 import socket
 import zlib
+import asyncio
 
 from time import sleep
 from threading import Thread
@@ -19,13 +20,15 @@ class BaseClient:
         self.disconnect_on_fail = not self.is_client
 
         self.recv_thread = Thread(target=self.poll_recv, daemon=True)
-        if not self.is_client:
-            self.recv_thread.start()
+        #if not self.is_client:
+        #    self.recv_thread.start()
     
     @property
     def data_stream(self) -> Generator:
         data = self.raw_data_stream
         self.raw_data_stream = []
+        if len(data) > 0:
+            print(f"Removing: {data}")
         yield from data
 
     def disconnect(self) -> None:
@@ -37,28 +40,58 @@ class BaseClient:
         except Exception as e:
             print(f"BaseClient - Error while joining recv_thread! {e}.")
 
-    def poll_recv(self) -> None:
-        while 1:
-            data = self.recv()
-            if data == {}:
+    async def poll_recv(self) -> None:
+        async for message in self.conn:
+            #print(message)
+            try:
+                #data = zlib.decompress(message).decode()
+                ...
+            except Exception as e:
+                print(f"BaseClient - Error while receiving data! {e}.")
                 continue
 
-            self.raw_data_stream.append(data)
+            try:
+                json_data = json.loads(message)
+            except Exception as e:
+                print(f"BaseClient - Error while loading json data! {e}.")
+                continue
+
+            if json_data == {}:
+                continue
+
+            self.raw_data_stream.append(json_data)
+
+        print("Connection to client closed")
         
     def sendnoto(self, json_data: dict[any, any]) -> None:
         self.send(json_data, to=False)
+
+    async def server_send(self, json_data: dict[any, any], to: bool = True) -> None:
+        data = json.dumps(json_data)
+        #raw_data = zlib.compress(data.encode())
+        raw_data = data
+        data_size = len(raw_data).to_bytes(4, byteorder="big") # 4 bytes
+
+        #print(f"BaseClient - Sending data: {raw_data}")
+        try:
+            #self.conn.sendto(data_size + raw_data, self.addr)
+            await self.conn.send(raw_data)
+        except Exception as e:
+            print(f"BaseClient - Error while sending data! {e}.")
 
     def send(self, json_data: dict[any, any], to: bool = True) -> None:
         #if to:
         #    json_data["to"] = list(self.addr)
 
         data = json.dumps(json_data)
-        raw_data = zlib.compress(data.encode())
+        #raw_data = zlib.compress(data.encode())
+        raw_data = data
         data_size = len(raw_data).to_bytes(4, byteorder="big") # 4 bytes
 
+        #print(f"BaseClient - Sending data: {raw_data}")
         try:
-            self.conn.sendto(data_size + raw_data, self.addr)
-            #self.conn.sendto(zlib.compress(raw_data), self.addr)
+            #self.conn.sendto(data_size + raw_data, self.addr)
+            self.conn.send(raw_data)
         except Exception as e:
             print(f"BaseClient - Error while sending data! {e}.")
 
@@ -180,6 +213,74 @@ class Client:
                 ...
 
         return False
+
+class WebSocketClient:
+    def __init__(self, host: str, port: int) -> None:
+        self.HOST = host
+        self.PORT = port
+
+        self.ws = None
+        self.base_client = None
+
+    def on_open(self, event):
+        print("Connected")
+        self.base_client = BaseClient(self.ws, (self.HOST, self.PORT), True)
+
+    def on_message(self, event):
+        print(event.data)
+        import js
+        js.console.log(event.data)
+        try:
+            #data = zlib.decompress(event.data).decode()
+            ...
+        except Exception as e:
+            print(f"BaseClient - Error while receiving data! {e}.")
+            return
+
+        try:
+            json_data = json.loads(event.data)
+        except Exception as e:
+            print(f"BaseClient - Error while loading json data! {e}.")
+            return
+
+        if json_data == {}:
+            return
+
+        self.base_client.raw_data_stream.append(json_data)
+
+    def on_close(self, event):
+        print("conn closed")
+        import js
+        js.console.log("conn closed")
+
+    def send(self, data):
+        import js
+        if self.base_client is not None:
+            self.base_client.send(data)
+            js.console.log(str(data))
+        else:
+            print("BaseClient is None!")
+            js.console.log("BaseClient is None!")
+
+    async def connect(self, max_retries = None) -> bool:
+        import js
+
+        try:
+            print("Connecting...")
+            self.ws = js.eval(f'new WebSocket("ws://{self.HOST}:{self.PORT}")')
+
+            self.ws.onopen = self.on_open
+            self.ws.onmessage = self.on_message
+            self.ws.onclose = self.on_close
+
+            while 1:
+                self.ws.send("alive")
+                await asyncio.sleep(0.1)
+
+        except Exception as e:
+            print(f"WSClient - Error while connecting: {e}")
+            return False
+
 class Server:
     def __init__(self, host: str, port: int) -> None:
         self.HOST = host
@@ -238,3 +339,32 @@ class Server:
             print(f"Server - Error while shutting down! {e}.")
         
         self.sock.close()
+
+class WebSocketServer:
+    def __init__(self) -> None:
+        import importlib 
+        self.websockets = importlib.import_module("websockets")
+        self.clients = []
+
+    async def sendall(self, msg):
+        for client in self.clients:
+            await client.send(msg)
+
+    async def handler(self, ws):
+        bc = BaseClient(ws, ("", len(self.clients)), False)
+        bc.send = bc.server_send
+        self.clients.append(bc)
+        print(f"Server - Client connected")
+        await bc.poll_recv()
+
+    async def broadcast(self, message):
+        for client in self.clients:
+            try:
+                await client.ws.send(message)
+            except Exception as e:
+                print(f"Server - Error while sending message! {e}.")
+
+    async def start(self):
+        async with self.websockets.serve(self.handler, "0.0.0.0", 8765):
+            print("Server started on ws://0.0.0.0:8765")
+            await asyncio.Future()

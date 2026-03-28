@@ -14,7 +14,7 @@ from utils import AnimManager, FONTS_PATH
 
 from leaderboard import Leaderboard
 
-from networking import Server, Client, BaseClient
+from networking import Server, Client, BaseClient, WebSocketServer, WebSocketClient
 
 from time import time, sleep
 from json import loads
@@ -170,35 +170,35 @@ class ShapeRoyale:
 
         self.anim_manager = AnimManager()
 
-        self.server = None
-        self.client = None
+        self.server = server
+        self.client = client
         self.player_name = "player"
 
-        if client is not None:
-            self.join_server(client.HOST, client.PORT, self.player_name) # Client will be dead so we reset
-        elif server is not None:
-            self.host_server(server.HOST, server.PORT) # Server will be dead so we reset
+    async def run(self) -> None:
+        if self.client is not None:
+            await self.join_server(self.client.HOST, self.client.PORT, self.player_name) # Client will be dead so we reset
+        elif self.server is not None:
+            await self.host_server(self.server.HOST, self.server.PORT) # Server will be dead so we reset
 
         if len(sys.argv) > 1:
             if sys.argv[1] == "host":
-                self.host_server(sys.argv[2], sys.argv[3])
+                await self.host_server(sys.argv[2], sys.argv[3])
             elif sys.argv[1] == "join":
-                self.join_server()
+                await self.join_server()
 
         if len(sys.argv) == 4 and (self.client is not None or self.server is not None):
             self.player_name = sys.argv[3]
 
-    async def run(self) -> None:
         self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
         await self.main_menu.main()
         self.player_name = self.main_menu.player_name
 
         if not self.main_menu.singleplayer and self.server is None and self.client is None:
             if self.main_menu.host:
-                self.host_server(self.main_menu.server_ip, self.main_menu.server_port)
+                await self.host_server(self.main_menu.server_ip, self.main_menu.server_port)
                 self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, self.main_menu.player.shape_index, self.main_menu.manager)
             else:
-                self.join_server(self.main_menu.server_ip, self.main_menu.server_port, self.main_menu.player_name)
+                await self.join_server(self.main_menu.server_ip, self.main_menu.server_port, self.main_menu.player_name)
                 self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, self.main_menu.player.shape_index, self.main_menu.manager)
 
             await self.main_menu.main()
@@ -211,8 +211,10 @@ class ShapeRoyale:
 
         if self.server is not None:
             while len(real_player_info)-1 != len(self.server.clients):
+                await asyncio.sleep(0)
                 for i, client in enumerate(self.server.clients):
                     for message in client.data_stream:
+                        print("message")
                         for dtype, query in message.items():
                             if dtype != "answer" or "send_starting_info" not in query:
                                 continue
@@ -324,25 +326,29 @@ class ShapeRoyale:
 
         return ret_dict
 
-    def host_server(self, ip: str, port: int) -> None:
-        self.server = Server(ip, port)
+    async def host_server(self, ip: str, port: int) -> None:
+        #self.server = Server(ip, port)
+        self.server = WebSocketServer()
+        asyncio.create_task(self.server.start())
 
-    def join_server(self, ip: str, port: int, name: str) -> Client:
+    async def join_server(self, ip: str, port: int, name: str) -> Client:
         self.screen.fill((0, 0, 0))
         loading_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("Connecting to server...", True, (255, 255, 255))
         self.screen.blit(loading_lbl, (self.WIDTH // 2 - loading_lbl.width // 2, self.HEIGHT // 2 - loading_lbl.height // 2))
 
-        self.client = Client(ip, port)
+        self.client = WebSocketClient(ip, port)
         connected = False
         while not connected:
             pg.display.flip()
+            await asyncio.sleep(0)
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     pg.quit()
                     sys.exit(0)
 
-            connected = self.client.connect(max_retries=1)
+            asyncio.create_task(self.client.connect(max_retries=1))
+            break
 
         self.player_name = name
 
@@ -447,14 +453,18 @@ class ShapeRoyale:
         if self.server is not None:
             player_data = [player.to_dict() for player in self.players]
             for i, client in enumerate(self.server.clients):
-                client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
-                client.send({"answer": {"player_set": player_data}})
+                await client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
+                await client.send({"answer": {"player_set": player_data}})
                     #client.send({"answer": {"player_set": True}})
-                client.send({"answer": {"player_index": i+1}})
+                await client.send({"answer": {"player_index": i+1}})
 
         if self.client is not None:
             done = False
+            import js
+            js.console.log("waiting for first main info")
             while not done:
+                #self.client.send({"answer": {"send_starting_info": {"shape_index": self.main_menu.player.shape_index, "name": self.player_name}}})
+                await asyncio.sleep(0)
                 for message in self.client.base_client.data_stream:
                     for dtype, query in message.items():
                         if dtype != "answer":
@@ -635,7 +645,7 @@ class ShapeRoyale:
                             else:
                                 if "player_set" in query:
                                     player_data = [player.to_dict() for player in self.players]
-                                    client.send({"answer": {"player_set": player_data}})
+                                    await client.send({"answer": {"player_set": player_data}})
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -694,7 +704,7 @@ class ShapeRoyale:
 
                 if self.server is not None:
                     for client in self.server.clients:
-                        client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_2_seed, "stage": 2}}})
+                        await client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_2_seed, "stage": 2}}})
 
             keys = pg.key.get_pressed()
 
@@ -781,7 +791,7 @@ class ShapeRoyale:
 
                 if self.server is not None:
                     if player.index != 0 and player.index <= len(self.server.clients):
-                        self.server.clients[player.index-1].send({"answer": {"set_bullets": [bullet.to_dict() for bullet in close_bullets]}})
+                        await self.server.clients[player.index-1].send({"answer": {"set_bullets": [bullet.to_dict() for bullet in close_bullets]}})
 
                 close_powerups = []
                 closest_powerup = None
@@ -808,7 +818,7 @@ class ShapeRoyale:
                                     
                                     if self.server is not None:
                                         for client in self.server.clients:
-                                            client.send({"answer": {"powerup_remove": {"powerup_index": powerup.index}}})
+                                            await client.send({"answer": {"powerup_remove": {"powerup_index": powerup.index}}})
 
                                     powerup.pickup(player)
                             else:
@@ -879,11 +889,11 @@ class ShapeRoyale:
 
                     if self.server is not None:
                         for client in self.server.clients:
-                            client.send({"answer": {"powerup_add": new_powerup.to_dict()}})
+                            await client.send({"answer": {"powerup_add": new_powerup.to_dict()}})
 
                 if self.server is not None:
                     for client in self.server.clients:
-                        client.send({"answer": {"player_remove": dead_player.index}})
+                        await client.send({"answer": {"player_remove": dead_player.index}})
 
                 self.players.remove(dead_player)
                 
@@ -895,7 +905,7 @@ class ShapeRoyale:
             if self.server is not None:
                 game_player_info = {"answer": {"player_update": [game_player.to_full_dict() for game_player in self.players]}}
                 for client in self.server.clients:
-                    client.send(game_player_info)
+                    await client.send(game_player_info)
 
             if self.starting_player.index != self.player.index:
                 self.spectating = True

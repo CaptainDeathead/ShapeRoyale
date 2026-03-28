@@ -116,7 +116,7 @@ class MainMenu:
                 self.player_name = self.name_entry.get_text()
 
             if self.server is not None:
-                self.server.sendall({"question": "send_starting_info"})
+                await self.server.sendall({"question": "send_starting_info"})
 
             if self.client is not None:
                 server_ready = False
@@ -147,6 +147,8 @@ class MainMenu:
                     for message in self.client.base_client.data_stream:
                         for dtype, query in message.items():
                             if dtype == "question" and query == "send_starting_info":
+                                import js
+                                js.console.log("sending starting info")
                                 self.client.send({"answer": {"send_starting_info": {"shape_index": self.player.shape_index, "name": self.player_name}}})
                                 server_ready = True
 
