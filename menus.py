@@ -73,16 +73,19 @@ class MainMenu:
 
         self.leaderboard = Leaderboard(self.display_surf, self.manager, [{"name": "Uninitialised"}])
         self.leaderboard.window.hide()
+        self.leaderboard.window.kill()
 
         with open("./Data/shapes.json", "r") as f:
             self.shape_info = loads(f.read())
+
+        self.player_info = {}
+
+        self.player_info[0] = {"name": self.player_name}
 
         if self.server is not None:
             self.player_info = {}
             for i in range(len(self.server.clients)):
                 self.player_info[i] = {"ready": False, "name": "player"}
-        else:
-            self.player_info = {0: {"name": self.player_name}}
 
         self.main()
 
@@ -242,11 +245,13 @@ class MainMenu:
                             self.player.shape_index = 0
                     elif event.key == pg.K_TAB:
                         self.leaderboard.window.hide()
-                        self.leaderboard = Leaderboard(self.display_surf, self.manager, self.player_info.values())
+                        self.leaderboard.window.kill()
+                        self.leaderboard = Leaderboard(self.display_surf, self.manager, list(self.player_info.values()))
                 
                 elif event.type == pg.KEYUP:
                     if event.key == pg.K_TAB:
                         self.leaderboard.window.hide()
+                        self.leaderboard.window.kill()
 
                 elif event.type == pygame_gui.UI_FORM_SUBMITTED:
                     if event.ui_element == self.config_box:

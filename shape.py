@@ -71,6 +71,7 @@ class Shape:
         self.squad = squad
         self.client = client
         self.player_name = player_name
+        self.squad.append(self)
 
         self.dead = False
 
@@ -130,7 +131,7 @@ class Shape:
 
     def to_dict(self) -> dict[str, any]:
         return {
-            "x": self.x, "y": self.y, "index": self.index, "shape_name": self.shape_name, "is_player": self.is_player, "squad": [], "player_name": self.player_name
+            "x": self.x, "y": self.y, "index": self.index, "shape_name": self.shape_name, "is_player": self.is_player, "squad": [player.index for player in self.squad], "player_name": self.player_name
         }
 
     def to_full_dict(self) -> dict[str, any]:

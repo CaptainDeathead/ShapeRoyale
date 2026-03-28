@@ -453,7 +453,8 @@ class ShapeRoyale:
                 else:
                     print(f"Winner: {self.players[0]}")
                     dt_mut *= 0.99
-                    self.end_screen = EndScreen(self.screen, self.starting_player, self.players[0])
+                    if self.end_screen is None:
+                        self.end_screen = EndScreen(self.screen, self.starting_player, self.players[0])
 
                     if self.server is not None:
                         for client in self.server.clients:
@@ -887,6 +888,16 @@ class ShapeRoyale:
                     self.server = None
 
                 self.end_screen.draw()
+ 
+                if not hasattr(self, "leaderboard"):
+                    all_players = [player for player in self.players]
+                    all_players.extend(list(reversed(self.dead_players)))
+                    self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+                else:
+                    if self.leaderboard is None:
+                        all_players = [player for player in self.players]
+                        all_players.extend(list(reversed(self.dead_players)))
+                        self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
 
             self.manager.draw_ui(self.screen)
 
