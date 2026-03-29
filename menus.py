@@ -116,6 +116,15 @@ class MainMenu:
                 self.player_name = self.name_entry.get_text()
 
             if self.server is not None:
+                clients_to_remove = []
+                for i, client in enumerate(self.server.clients):
+                    if i not in self.player_info:
+                        print(f"Excluding player {i} from the game due to no ready response.")
+                        clients_to_remove.append(client)
+                
+                for client in clients_to_remove:
+                    self.server.clients.remove(client)
+
                 await self.server.sendall({"question": "send_starting_info"})
 
             if self.client is not None:

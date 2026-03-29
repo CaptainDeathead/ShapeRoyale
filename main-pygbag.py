@@ -214,7 +214,9 @@ class ShapeRoyale:
         real_player_info = {0: (self.main_menu.player.shape_index, self.main_menu.player_name, None)}
 
         if self.server is not None:
-            while len(real_player_info)-1 != len(self.server.clients):
+            start_wait_time = time()
+            clients_responded = []
+            while (len(real_player_info)-1 != len(self.server.clients)) and time() - start_wait_time < 5: # 5 seconds
                 await asyncio.sleep(0)
                 for i, client in enumerate(self.server.clients):
                     for message in client.data_stream:
@@ -228,6 +230,9 @@ class ShapeRoyale:
                                 player_name = player_name[:25]
 
                             real_player_info[i+1] = (query["send_starting_info"]["shape_index"], player_name, client)
+                            clients_responded.append(client)
+
+            self.clients = clients_responded
 
         self.bullet_img = pg.transform.smoothscale(pg.image.load("./Data/assets/Bullet_Sprite.png").convert_alpha(), (10, 10))
 
@@ -961,6 +966,8 @@ class ShapeRoyale:
                     self.server_task.cancel()
                     self.dead_server = self.server
                     self.server = None
+                elif self.client is not None:
+                    self.connect_task.cancel()
 
                 self.end_screen.draw()
  

@@ -272,6 +272,7 @@ class WebSocketClient:
 
     async def connect(self, max_retries = None) -> bool:
         import js
+        import traceback
 
         try:
             print("Connecting...")
@@ -283,9 +284,12 @@ class WebSocketClient:
 
             while 1:
                 try:
-                    await self.ws.send(json.dumps({"auth": self.uuid}))
+                    self.ws.send(json.dumps({"auth": self.uuid}))
                     break
-                except:
+                except Exception as e:
+                    #js.console.log(f"{self.ws.send}")
+                    js.console.log(f"Error while sending auth: {e}")
+                    js.console.log(f"{traceback.format_exc()}")
                     await asyncio.sleep(0.1)
 
             while self.connected:
