@@ -27,8 +27,8 @@ class BaseClient:
     def data_stream(self) -> Generator:
         data = self.raw_data_stream
         self.raw_data_stream = []
-        if len(data) > 0:
-            print(f"Removing: {data}")
+        #if len(data) > 0:
+        #    print(f"Removing: {data}")
         yield from data
 
     def disconnect(self) -> None:
@@ -227,9 +227,9 @@ class WebSocketClient:
         self.base_client = BaseClient(self.ws, (self.HOST, self.PORT), True)
 
     def on_message(self, event):
-        print(event.data)
+        #print(event.data)
         import js
-        js.console.log(event.data)
+        #js.console.log(event.data)
         try:
             #data = zlib.decompress(event.data).decode()
             ...
@@ -249,15 +249,15 @@ class WebSocketClient:
         self.base_client.raw_data_stream.append(json_data)
 
     def on_close(self, event):
-        print("conn closed")
+        print(f"conn closed: {event.code}, {event.reason}")
         import js
-        js.console.log("conn closed")
+        js.console.log(f"conn closed: {event.code}, {event.reason}")
 
     def send(self, data):
         import js
         if self.base_client is not None:
             self.base_client.send(data)
-            js.console.log(str(data))
+            #js.console.log(str(data))
         else:
             print("BaseClient is None!")
             js.console.log("BaseClient is None!")
@@ -274,8 +274,8 @@ class WebSocketClient:
             self.ws.onclose = self.on_close
 
             while 1:
-                self.ws.send("alive")
-                await asyncio.sleep(0.1)
+                #self.ws.send("alive")
+                await asyncio.sleep(1)
 
         except Exception as e:
             print(f"WSClient - Error while connecting: {e}")

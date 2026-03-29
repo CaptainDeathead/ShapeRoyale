@@ -261,7 +261,7 @@ class ShapeRoyale:
 
         if self.client is None:
             self.players = self.generate_players(real_player_info)
-            self.powerups = self.generate_powerups(self.powerup_stage_1_seed)
+            self.powerups = await self.generate_powerups(self.powerup_stage_1_seed)
 
         self.sounds = {
             "hitHurt": pg.Sound("./Data/assets/Sounds/hitHurt.wav"),
@@ -418,7 +418,7 @@ class ShapeRoyale:
 
         return shapes
 
-    def generate_powerups(self, seed: int, starting_index: int = 0, spawn_min_x: float = 0, spawn_max_x: float = MAP_SIZE-1, spawn_min_y: float = 0, spawn_max_y: float = MAP_SIZE-1) -> List[Powerup]:
+    async def generate_powerups(self, seed: int, starting_index: int = 0, spawn_min_x: float = 0, spawn_max_x: float = MAP_SIZE-1, spawn_min_y: float = 0, spawn_max_y: float = MAP_SIZE-1) -> List[Powerup]:
         powerups = []
 
         common_rarity_max = self.powerup_info["Common"]["spawn_chance"]
@@ -429,6 +429,7 @@ class ShapeRoyale:
         rng = Random(seed)
 
         for i in range(self.NUM_POWERUPS):
+            await asyncio.sleep(0)
             rarity_number = rng.uniform(0.0, 1.0)
 
             if rarity_number <= legendary_rarity_max: rarity = "Legendary"
@@ -472,9 +473,9 @@ class ShapeRoyale:
 
                         if "powerup_set" in query:
                             if query["powerup_set"]["stage"] == 1:
-                                self.powerups = self.generate_powerups(query["powerup_set"]["seed"])
+                                self.powerups = await self.generate_powerups(query["powerup_set"]["seed"])
                             else:
-                                self.powerups.extend(self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+                                self.powerups.extend(await self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
 
                         elif "player_set" in query:
                             self.players = [Shape(self.MAP_SIZE, player_desc["x"], player_desc["y"], player_desc["index"], player_desc["shape_name"], self.shape_info, self.shape_images[f"{player_desc["shape_name"]}Friendly"], self.shape_images[f"{player_desc["shape_name"]}Enemy"], self.bullets, self.bullet_img, player_desc["is_player"], player_desc["squad"], None, player_desc["player_name"]) for player_desc in query["player_set"]]
@@ -610,10 +611,10 @@ class ShapeRoyale:
 
                         if "powerup_set" in query:
                             if query["powerup_set"]["stage"] == 1:
-                                self.powerups = self.generate_powerups(query["powerup_set"]["seed"])
+                                self.powerups = await self.generate_powerups(query["powerup_set"]["seed"])
                             else:
                                 self.NUM_POWERUPS = self.NUM_POWERUP_SECTIONS * 10
-                                self.powerups.extend(self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+                                self.powerups.extend(await self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
 
             elif self.server is not None:
                 for client in self.server.clients:
@@ -699,7 +700,7 @@ class ShapeRoyale:
 
             if x_walls_dist < self.MAP_SIZE / 1.66 and y_walls_dist < self.MAP_SIZE / 1.66 and not self.has_done_bonus_powerups and self.client is None:
                 self.NUM_POWERUPS = self.NUM_POWERUP_SECTIONS * 10 # half
-                self.powerups.extend(self.generate_powerups(self.powerup_stage_2_seed, self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
+                self.powerups.extend(await self.generate_powerups(self.powerup_stage_2_seed, self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
                 self.has_done_bonus_powerups = True
 
                 if self.server is not None:
