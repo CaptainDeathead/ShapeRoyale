@@ -155,7 +155,7 @@ class ShapeRoyale:
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
-    def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None, server: Server | None = None) -> None:
+    def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None, server: Server | None = None, main_menu_manager: pygame_gui.UIManager | None = None) -> None:
         if not (self.NUM_POWERUPS / self.NUM_POWERUP_SECTIONS).is_integer() or self.NUM_POWERUPS % self.NUM_POWERUP_SECTIONS != 0:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
 
@@ -173,6 +173,10 @@ class ShapeRoyale:
         self.server = server
         self.client = client
         self.player_name = "player"
+        self.main_menu_manager = main_menu_manager
+        self.dead_server = None
+
+        self.clock = pg.time.Clock()
 
     async def run(self) -> None:
         if self.client is not None:
@@ -189,7 +193,7 @@ class ShapeRoyale:
         if len(sys.argv) == 4 and (self.client is not None or self.server is not None):
             self.player_name = sys.argv[3]
 
-        self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name)
+        self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, manager=self.main_menu_manager)
         await self.main_menu.main()
         self.player_name = self.main_menu.player_name
 
@@ -214,7 +218,7 @@ class ShapeRoyale:
                 await asyncio.sleep(0)
                 for i, client in enumerate(self.server.clients):
                     for message in client.data_stream:
-                        print("message")
+                        print(message)
                         for dtype, query in message.items():
                             if dtype != "answer" or "send_starting_info" not in query:
                                 continue
@@ -224,8 +228,6 @@ class ShapeRoyale:
                                 player_name = player_name[:25]
 
                             real_player_info[i+1] = (query["send_starting_info"]["shape_index"], player_name, client)
-
-        self.clock = pg.time.Clock()
 
         self.bullet_img = pg.transform.smoothscale(pg.image.load("./Data/assets/Bullet_Sprite.png").convert_alpha(), (10, 10))
 
@@ -328,8 +330,8 @@ class ShapeRoyale:
 
     async def host_server(self, ip: str, port: int) -> None:
         #self.server = Server(ip, port)
-        self.server = WebSocketServer()
-        asyncio.create_task(self.server.start())
+        self.server = WebSocketServer(ip, port)
+        self.server_task = asyncio.create_task(self.server.start())
 
     async def join_server(self, ip: str, port: int, name: str) -> Client:
         self.screen.fill((0, 0, 0))
@@ -337,8 +339,9 @@ class ShapeRoyale:
         self.screen.blit(loading_lbl, (self.WIDTH // 2 - loading_lbl.width // 2, self.HEIGHT // 2 - loading_lbl.height // 2))
 
         self.client = WebSocketClient(ip, port)
-        connected = False
-        while not connected:
+        self.connect_task = asyncio.create_task(self.client.connect(max_retries=1))
+        while not self.client.connected:
+            dt = self.clock.tick(60) / 1000.0
             pg.display.flip()
             await asyncio.sleep(0)
 
@@ -346,9 +349,6 @@ class ShapeRoyale:
                 if event.type == pg.QUIT:
                     pg.quit()
                     sys.exit(0)
-
-            asyncio.create_task(self.client.connect(max_retries=1))
-            break
 
         self.player_name = name
 
@@ -495,6 +495,9 @@ class ShapeRoyale:
             self.player.squad.append(self.player)
             self.starting_player = self.players[self.spectator_index]
 
+        if self.server is not None:
+            await asyncio.sleep(1) # Give clients time to catch up
+
         self.spectator_player = self.player
         while 1:
             await asyncio.sleep(0)
@@ -511,10 +514,13 @@ class ShapeRoyale:
 
                     if self.server is not None:
                         for client in self.server.clients:
-                            client.send({"answer": {"winner": self.player.to_winner_dict()}})
+                            await client.send({"answer": {"winner": self.player.to_winner_dict()}})
 
-            dt = (self.clock.tick(60) / 1000.0) * dt_mut
+            dt = min((self.clock.tick(60) / 1000.0) * dt_mut, 1)
             dt_sum += dt
+
+            if dt == 1:
+                print("Slow server framerate")
 
             self.manager.update(dt / dt_mut)
 
@@ -541,6 +547,13 @@ class ShapeRoyale:
                                         setattr(target_player, key, value)
 
                                     target_player.last_update = time()
+
+                        if "wall_update" in query:
+                            update = query["wall_update"]
+                            self.safezone.left_wall = update["left_wall"]
+                            self.safezone.right_wall = update["right_wall"]
+                            self.safezone.top_wall = update["top_wall"]
+                            self.safezone.bottom_wall = update["bottom_wall"]
 
                         if "winner" in query:
                             update = query["winner"]
@@ -674,7 +687,8 @@ class ShapeRoyale:
                     #        self.player.showing_powerup_popup = False
                     if event.key == pg.K_RETURN:
                         if self.end_screen is not None:
-                            self.__init__(self.screen, self.client, self.server)
+                            self.__init__(self.screen, self.client, self.dead_server, self.main_menu.manager)
+                            await self.run()
 
                 self.manager.process_events(event)
 
@@ -905,8 +919,10 @@ class ShapeRoyale:
 
             if self.server is not None:
                 game_player_info = {"answer": {"player_update": [game_player.to_full_dict() for game_player in self.players]}}
+                wall_info =  {"answer": {"wall_update": {"left_wall": self.safezone.left_wall, "right_wall": self.safezone.right_wall, "top_wall": self.safezone.top_wall, "bottom_wall": self.safezone.bottom_wall}}}
                 for client in self.server.clients:
                     await client.send(game_player_info)
+                    await client.send(wall_info)
 
             if self.starting_player.index != self.player.index:
                 self.spectating = True
@@ -941,7 +957,9 @@ class ShapeRoyale:
 
             if self.end_screen is not None and dt_mut < 0.10:
                 if self.server is not None:
-                    self.server.shutdown()
+                    #self.server.shutdown()
+                    self.server_task.cancel()
+                    self.dead_server = self.server
                     self.server = None
 
                 self.end_screen.draw()

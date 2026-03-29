@@ -2,6 +2,7 @@ import json
 import socket
 import zlib
 import asyncio
+import uuid
 
 from time import sleep
 from threading import Thread
@@ -222,8 +223,12 @@ class WebSocketClient:
         self.ws = None
         self.base_client = None
 
+        self.connected = False
+        self.uuid = str(uuid.uuid4())
+
     def on_open(self, event):
         print("Connected")
+        self.connected = True
         self.base_client = BaseClient(self.ws, (self.HOST, self.PORT), True)
 
     def on_message(self, event):
@@ -249,9 +254,12 @@ class WebSocketClient:
         self.base_client.raw_data_stream.append(json_data)
 
     def on_close(self, event):
+        self.connected = False
         print(f"conn closed: {event.code}, {event.reason}")
         import js
         js.console.log(f"conn closed: {event.code}, {event.reason}")
+
+        asyncio.create_task(self.connect())
 
     def send(self, data):
         import js
@@ -274,6 +282,13 @@ class WebSocketClient:
             self.ws.onclose = self.on_close
 
             while 1:
+                try:
+                    await self.ws.send(json.dumps({"auth": self.uuid}))
+                    break
+                except:
+                    await asyncio.sleep(0.1)
+
+            while self.connected:
                 #self.ws.send("alive")
                 await asyncio.sleep(1)
 
@@ -341,7 +356,10 @@ class Server:
         self.sock.close()
 
 class WebSocketServer:
-    def __init__(self) -> None:
+    def __init__(self, host: str, port: str) -> None:
+        self.HOST = host
+        self.PORT = port
+
         import importlib 
         self.websockets = importlib.import_module("websockets")
         self.clients = []
@@ -350,11 +368,32 @@ class WebSocketServer:
         for client in self.clients:
             await client.send(msg)
 
-    async def handler(self, ws):
-        bc = BaseClient(ws, ("", len(self.clients)), False)
+    async def gatekeeper(self, ws):
+        print("Server - Gatekeeping client (awaiting auth)...")
+        async for message in ws:
+            try:
+                data = json.loads(message)
+
+                if data.get("auth"):
+                    client_id = data.get("auth")
+                    for client in self.clients:
+                        if client.addr[1] == client_id:
+                            client.conn = ws
+                            client.dead = False
+                            print(f"Server - Client with uuid ({client_id}) reconnected!")
+                            return
+
+                    await self.handler(ws, client_id)
+                    return
+
+            except Exception as e:
+                print(f"Server - Error while connecting client: {e}")
+
+    async def handler(self, ws, client_id):
+        bc = BaseClient(ws, ("", client_id), False)
         bc.send = bc.server_send
         self.clients.append(bc)
-        print(f"Server - Client connected")
+        print(f"Server - New client connected with uuid ({client_id})!")
         await bc.poll_recv()
 
     async def broadcast(self, message):
@@ -365,6 +404,6 @@ class WebSocketServer:
                 print(f"Server - Error while sending message! {e}.")
 
     async def start(self):
-        async with self.websockets.serve(self.handler, "0.0.0.0", 8765):
-            print("Server started on ws://0.0.0.0:8765")
+        async with self.websockets.serve(self.gatekeeper, self.HOST, self.PORT):
+            print(f"Server started on ws://{self.HOST}:{self.PORT}")
             await asyncio.Future()
