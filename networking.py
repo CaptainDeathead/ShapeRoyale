@@ -367,6 +367,7 @@ class WebSocketServer:
         import importlib 
         self.websockets = importlib.import_module("websockets")
         self.clients = []
+        self.server = None
 
     async def sendall(self, msg):
         for client in self.clients:
@@ -408,6 +409,12 @@ class WebSocketServer:
                 print(f"Server - Error while sending message! {e}.")
 
     async def start(self):
-        async with self.websockets.serve(self.gatekeeper, self.HOST, self.PORT):
-            print(f"Server started on ws://{self.HOST}:{self.PORT}")
-            await asyncio.Future()
+        while 1:
+            try:
+                self.server = await self.websockets.serve(self.gatekeeper, self.HOST, self.PORT)
+                break
+            except OSError as e:
+                print(f"Server - Bind failed: {e}")
+
+        print(f"Server started on ws://{self.HOST}:{self.PORT}")
+        await asyncio.Future()

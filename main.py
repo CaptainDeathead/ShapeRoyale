@@ -148,7 +148,7 @@ class ShapeRoyale:
     MAP_SIZE_Y = MAP_SIZE
 
     NUM_PHASES = 4
-    NUM_PLAYERS = 100
+    NUM_PLAYERS = 2
     NUM_POWERUP_SECTIONS = 24 
     NUM_POWERUPS = NUM_POWERUP_SECTIONS * 20 # this must be divisible by the NUM_POWERUP_SECTIONS
     POWERUP_SECTION_SIZE = MAP_SIZE / NUM_POWERUP_SECTIONS
@@ -175,6 +175,7 @@ class ShapeRoyale:
         self.player_name = "player"
         self.main_menu_manager = main_menu_manager
         self.dead_server = None
+        self.auto_start = False
 
         self.clock = pg.time.Clock()
 
@@ -187,13 +188,14 @@ class ShapeRoyale:
         if len(sys.argv) > 1:
             if sys.argv[1] == "host":
                 await self.host_server(sys.argv[2], sys.argv[3])
+                self.auto_start = True
             elif sys.argv[1] == "join":
                 await self.join_server()
 
         if len(sys.argv) == 4 and (self.client is not None or self.server is not None):
             self.player_name = sys.argv[3]
 
-        self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, manager=self.main_menu_manager)
+        self.main_menu = MainMenu(self.screen, self.server, self.client, self.player_name, manager=self.main_menu_manager, auto_start=self.auto_start)
         await self.main_menu.main()
         self.player_name = self.main_menu.player_name
 
@@ -452,6 +454,10 @@ class ShapeRoyale:
         if powerup in self.powerups:
             self.powerups.remove(powerup)
 
+    async def restart(self) -> None:
+        self.__init__(self.screen, self.client, self.dead_server, self.main_menu.manager)
+        await self.run()
+
     async def main(self) -> None:
         dt_mut = 1
         dt_sum = 0
@@ -692,8 +698,8 @@ class ShapeRoyale:
                     #        self.player.showing_powerup_popup = False
                     if event.key == pg.K_RETURN:
                         if self.end_screen is not None:
-                            self.__init__(self.screen, self.client, self.dead_server, self.main_menu.manager)
-                            await self.run()
+                            await self.restart()
+                            return
 
                 self.manager.process_events(event)
 
@@ -963,9 +969,17 @@ class ShapeRoyale:
             if self.end_screen is not None and dt_mut < 0.10:
                 if self.server is not None:
                     #self.server.shutdown()
+                    print("Closing server...")
+                    self.server.server.close()
+                    await self.server.server.wait_closed()
                     self.server_task.cancel()
+                    print("Server closed.")
                     self.dead_server = self.server
                     self.server = None
+
+                    if self.auto_start:
+                        return
+
                 elif self.client is not None:
                     self.connect_task.cancel()
 
@@ -986,8 +1000,13 @@ class ShapeRoyale:
             pg.display.flip()
 
 async def main():
-    sr = ShapeRoyale()
-    await sr.run()
+    display_surf = None
+    while 1:
+        sr = ShapeRoyale(display_surf)
+        await sr.run()
+        display_surf = sr.screen
+        if not sr.auto_start:
+            break
 
 if __name__ == "__main__":
     asyncio.run(main())

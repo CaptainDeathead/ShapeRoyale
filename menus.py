@@ -17,11 +17,15 @@ from time import time
 class MainMenu:
     TIMER_LENGTH = 1
 
-    def __init__(self, display_surf: pg.Surface, server: Server | None, client: Client | None, player_name: str | None = None, shape_index: int = 0, manager: pygame_gui.UIManager | None = None) -> None:
+    def __init__(self, display_surf: pg.Surface, server: Server | None, client: Client | None, player_name: str | None = None, shape_index: int = 0, manager: pygame_gui.UIManager | None = None, auto_start: bool = False) -> None:
         self.display_surf = display_surf
         self.server = server
         self.client = client
         self.player_name = player_name
+        self.auto_start = auto_start
+
+        if self.auto_start:
+            self.TIMER_LENGTH = 10
 
         self.clock = pg.time.Clock()
 
@@ -104,7 +108,21 @@ class MainMenu:
         self.timer_first_beep = True
 
     async def check_game_start(self) -> None:
-        if not self.player.ready:
+        if self.server is not None and self.auto_start:
+            ready_clients = []
+            for i, client in enumerate(self.server.clients):
+                ready = self.player_info.get(i, {}).get("ready", None)
+                if ready == False:
+                    self.reset_timer()
+                    return
+                elif ready == True:
+                    ready_clients.append(client)
+
+            if len(ready_clients) < 1:
+                self.reset_timer()
+                return
+
+        elif not self.player.ready:
             self.reset_timer()
             return
 
