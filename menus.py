@@ -100,6 +100,8 @@ class MainMenu:
             for i in range(len(self.server.clients)):
                 self.player_info[i] = {"ready": False, "name": "player"}
 
+        self.spectating = False
+
         #self.main()
 
     def reset_timer(self) -> None:
@@ -178,6 +180,9 @@ class MainMenu:
                                 js.console.log("sending starting info")
                                 self.client.send({"answer": {"send_starting_info": {"shape_index": self.player.shape_index, "name": self.player_name}}})
                                 server_ready = True
+                            elif dtype == "answer" and "wall_update" in query:
+                                self.spectating = True
+                                self.start_game = True
 
                     self.manager.update(dt)
                     self.manager.draw_ui(self.display_surf)
@@ -368,6 +373,12 @@ class MainMenu:
 
             if self.client is not None:
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
+
+                for message in self.client.base_client.data_stream:
+                    for dtype, query in message.items():
+                        if dtype == "answer" and "wall_update" in query:
+                            self.spectating = True
+                            self.start_game = True
 
             await self.check_game_start()
 

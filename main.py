@@ -148,7 +148,7 @@ class ShapeRoyale:
     MAP_SIZE_Y = MAP_SIZE
 
     NUM_PHASES = 4
-    NUM_PLAYERS = 2
+    NUM_PLAYERS = 100
     NUM_POWERUP_SECTIONS = 24 
     NUM_POWERUPS = NUM_POWERUP_SECTIONS * 20 # this must be divisible by the NUM_POWERUP_SECTIONS
     POWERUP_SECTION_SIZE = MAP_SIZE / NUM_POWERUP_SECTIONS
@@ -288,7 +288,7 @@ class ShapeRoyale:
         self.spectating_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("You are spectating!", True, (255, 255, 255))
 
         self.spectator_index = 0
-        self.spectating = False
+        self.spectating = self.main_menu.spectating
         self.spectator_player = None
         
         if len(self.players) > 0:
@@ -477,6 +477,11 @@ class ShapeRoyale:
             while not done:
                 #self.client.send({"answer": {"send_starting_info": {"shape_index": self.main_menu.player.shape_index, "name": self.player_name}}})
                 await asyncio.sleep(0)
+
+                if self.spectating:
+                    js.console.log("Requesting starting info")
+                    self.client.send({"answer": {"send_starting_info": {"shape_index": self.main_menu.player.shape_index, "name": self.player_name}}})
+
                 for message in self.client.base_client.data_stream:
                     for dtype, query in message.items():
                         if dtype != "answer":
@@ -502,13 +507,16 @@ class ShapeRoyale:
                             self.client.send({"question": "player_set"})
 
                         if self.powerups != [] and self.players != [] and self.spectator_index != 0: done = True
-                
+
+            print(self.players, self.spectator_index)
+
             self.player.squad.append(self.player)
             self.starting_player = self.players[self.spectator_index]
 
         if self.server is not None:
             await asyncio.sleep(1) # Give clients time to catch up
 
+        print("on")
         self.spectator_player = self.player
         while 1:
             await asyncio.sleep(0)
@@ -666,6 +674,14 @@ class ShapeRoyale:
                                     
                                     if target_player is not None:
                                         target_player.shoot()
+
+                                elif "send_starting_info" in query:
+                                    print("Sending starting info on random request.")
+                                    player_data = [player.to_dict() for player in self.players]
+                                    await client.send({"answer": {"powerup_set": {"seed": self.powerup_stage_1_seed, "stage": 1}}})
+                                    await client.send({"answer": {"player_set": player_data}})
+                                        #client.send({"answer": {"player_set": True}})
+                                    await client.send({"answer": {"player_index": -1}})
 
                             else:
                                 if "player_set" in query:
