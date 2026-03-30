@@ -276,7 +276,7 @@ class WebSocketClient:
 
         try:
             print("Connecting...")
-            self.ws = js.eval(f'new WebSocket("wss://{self.HOST}:{self.PORT}")')
+            self.ws = js.eval(f'new WebSocket("ws://{self.HOST}:{self.PORT}")')
 
             self.ws.onopen = self.on_open
             self.ws.onmessage = self.on_message
