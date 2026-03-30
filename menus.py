@@ -98,9 +98,21 @@ class MainMenu:
         if self.server is not None:
             self.player_info = {}
             for i in range(len(self.server.clients)):
-                self.player_info[i] = {"ready": False, "name": "player"}
+                self.player_info[i] = {"ready": False, "name": "player", "squad": []}
 
         self.spectating = False
+        self.join_player = None
+        self.squad = []
+        self.active_squads = []
+
+        if self.client is not None:
+            import js
+            params = js.eval("new URLSearchParams(window.location.search)")
+            self.join_player = params.get("squadmate")
+            js.console.log(f"join_player: {self.join_player}")
+
+            if self.join_player is not None:
+                self.client.send({"question": {"join_player": self.join_player}})
 
         #self.main()
 
@@ -148,6 +160,14 @@ class MainMenu:
                 await self.server.sendall({"question": "send_starting_info"})
 
             if self.client is not None:
+                self.display_surf.fill((0, 0, 0))
+                loading_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("Waiting for host...", True, (255, 255, 255))
+                extra_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 40).render("'enter' to unready", True, (255, 255, 255))
+                extra_color_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 40).render(" enter            ", True, (0, 255, 0))
+                self.display_surf.blit(loading_lbl, (self.width // 2 - loading_lbl.width // 2, self.height // 2 - loading_lbl.height // 2))
+                self.display_surf.blit(extra_lbl, (self.width // 2 - extra_lbl.width // 2, self.height // 2 - extra_lbl.height // 2 + loading_lbl.height))
+                self.display_surf.blit(extra_color_lbl, (self.width // 2 - extra_color_lbl.width // 2, self.height // 2 - extra_color_lbl.height // 2 + loading_lbl.height))
+
                 server_ready = False
                 while not server_ready:
                     dt = self.clock.tick(60) / 1000.0
@@ -361,24 +381,82 @@ class MainMenu:
                 for i, client in enumerate(self.server.clients):
                     for message in client.data_stream:
                         for dtype, query in message.items():
-                            if dtype != "answer":
-                                continue
+                            if dtype == "question":
+                                if "join_player" in query:
+                                    print("Received join_player question.")
+                                    player_uuid = query["join_player"]
+
+                                    if i not in self.player_info:
+                                        print("Can't join_player - player info not received.")
+                                        continue
+
+                                    in_squad = False
+                                    for squad in self.active_squads:
+                                        if i in squad:
+                                            print("Can't join_player - player already in a squad.")
+                                            in_squad = True
+                                            break
+                                    if in_squad: continue
+
+                                    for j, other_client in enumerate(self.server.clients):
+                                        if client == other_client: continue
+
+                                        if other_client.addr[1] == player_uuid:
+                                            if j not in self.player_info:
+                                                break
+
+                                            in_squad = False
+                                            for squad in self.active_squads:
+                                                if j in squad:
+                                                    in_squad = True
+                                                    squad.append(i)
+                                                    print("A player joined another player's squad!")
+                                                    break
+                                            
+                                            if not in_squad:
+                                                self.active_squads.append([j, i])
+                                                print("A player joined another player's squad!")
+                                                break
 
                             if "ready" in query:
                                 player_name = query["name"]
                                 if len(player_name) > 25:
                                     player_name = player_name[:25]
 
+                                active_squad = None
+                                for squad in self.active_squads:
+                                    if i in squad:
+                                        active_squad = squad
+                                        break
+
+                                squad_info = []
+                                if active_squad is not None:
+                                    for mem_index in active_squad:
+                                        squad_info.append((self.player_info[mem_index]["name"], mem_index, self.player_info[mem_index]["ready"]))
+
+                                await self.server.sendall({"answer": {"squad_info": squad_info}})
+
                                 self.player_info[i] = {"ready": query["ready"], "name": player_name}
 
             if self.client is not None:
+                if len(self.squad) > 0:
+                    self.display_surf.blit(self.fonts["small"].render("Squad:", True, (255, 255, 255)), (self.width // 2 + 280, self.height // 2 - 230))
+                    for i, (name, index, player_ready) in enumerate(self.squad):
+                        self.display_surf.blit(self.fonts["small"].render(f"{name} - Ready: {player_ready}", True, (0, 255, 0)), (self.width // 2 + 300, self.height // 2 - 200 + (30 * i)))
+
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
+
+                if self.join_player is not None and len(self.squad) == 0:
+                    self.client.send({"question": {"join_player": self.join_player}})
 
                 for message in self.client.base_client.data_stream:
                     for dtype, query in message.items():
-                        if dtype == "answer" and "wall_update" in query:
-                            self.spectating = True
-                            self.start_game = True
+                        if dtype == "answer":
+                            if "wall_update" in query:
+                                self.spectating = True
+                                self.start_game = True
+                            elif "squad_info" in query:
+                                self.squad = query["squad_info"]
 
             await self.check_game_start()
 

@@ -145,8 +145,10 @@ class Safezone:
 
 class ShapeRoyale:
     PYGAME_INFO: any = pg.display.Info()
-    WIDTH: int = PYGAME_INFO.current_w
-    HEIGHT: int = PYGAME_INFO.current_h
+    #WIDTH: int = PYGAME_INFO.current_w
+    #HEIGHT: int = PYGAME_INFO.current_h
+    WIDTH: int = 1920
+    HEIGHT: int = 1080
 
     MAP_SIZE = 30_000
     MAP_SIZE_X = MAP_SIZE
