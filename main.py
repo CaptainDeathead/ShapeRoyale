@@ -37,6 +37,11 @@ print(startup_str)
 
 pg.init()
 
+class Sound:
+    def __init__(self, *args) -> None: ...
+    def play(self, *args) -> None: ...
+    def set_volume(self, *args) -> None: ...
+
 class Screen(pg.Surface):
     def __init__(self, rect: pg.Rect, flags: int = 0) -> None:
         self.positioning_rect = rect
@@ -189,6 +194,7 @@ class ShapeRoyale:
             if sys.argv[1] == "host":
                 await self.host_server(sys.argv[2], sys.argv[3])
                 self.auto_start = True
+                pg.Sound = Sound # For headless servers
             elif sys.argv[1] == "join":
                 await self.join_server()
 
