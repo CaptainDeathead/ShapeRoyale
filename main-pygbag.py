@@ -400,9 +400,8 @@ class ShapeRoyale:
 
     def generate_players(self, real_player_info: List[tuple[int, str, Client | None]]) -> List[Shape]:
         shapes = []
-        squads = []
+        squads = [[] for squad in self.main_menu.active_squads]
 
-        curr_squad = []
         for i, (shape_index, name, client) in dict(sorted(real_player_info.items(), key=lambda item: item[0])).items():
             print(shape_index, name, client)
             shape_type = self.shape_names[shape_index]
@@ -410,6 +409,11 @@ class ShapeRoyale:
                 self.MAP_SIZE, randint(3000, self.MAP_SIZE_X-3000), randint(3000, self.MAP_SIZE_Y-3000), i, shape_type, self.shape_info, self.shape_images[f"{shape_type}Friendly"],
                 self.shape_images[f"{shape_type}Enemy"], self.bullets, self.bullet_img, True, [], client, name
             )
+            
+            curr_squad = []
+            for squad_index, squad in enumerate(self.main_menu.active_squads):
+                if i-1 in squad: # i-1 because the server has been inserted first into the indexes (trust me)
+                    curr_squad = squads[squad_index]
 
             if len(curr_squad) > 0:
                 new_shape.x, new_shape.y = curr_squad[-1].x + 200, curr_squad[-1].y
@@ -418,9 +422,9 @@ class ShapeRoyale:
             new_shape.squad = curr_squad
             shapes.append(new_shape)
 
-            if len(curr_squad) == self.squad_size:
-                squads.append(curr_squad)
-                curr_squad = []
+            #if len(curr_squad) == self.squad_size:
+            #    squads.append(curr_squad)
+            #    curr_squad = []
 
         for i in range(len(shapes), self.NUM_PLAYERS):
             name = choice(self.shape_names)
