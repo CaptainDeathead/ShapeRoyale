@@ -435,7 +435,8 @@ class ShapeRoyale:
             #    squads.append(curr_squad)
             #    curr_squad = []
 
-        for i in range(len(shapes), self.NUM_PLAYERS):
+        #for i in range(len(shapes), self.NUM_PLAYERS):
+        for i in range(0):
             name = choice(self.shape_names)
             new_shape = Shape(
                 self.MAP_SIZE, randint(3000, self.MAP_SIZE_X-3000), randint(3000, self.MAP_SIZE_Y-3000), i, name, self.shape_info, self.shape_images[f"{name}Friendly"],

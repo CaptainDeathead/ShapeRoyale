@@ -54,6 +54,7 @@ class BaseClient:
             try:
                 json_data = json.loads(message)
             except Exception as e:
+                if "1001" in str(e) and "going away" in str(e): continue
                 print(f"BaseClient - Error while loading json data! {e}.")
                 continue
 
@@ -78,7 +79,8 @@ class BaseClient:
             #self.conn.sendto(data_size + raw_data, self.addr)
             await self.conn.send(raw_data)
         except Exception as e:
-            print(f"BaseClient - Error while sending data! {e}.")
+            if "1001" not in str(e) and "going away" not in str(e):
+                print(f"BaseClient - Error while sending data! {e}.")
 
     def send(self, json_data: dict[any, any], to: bool = True) -> None:
         #if to:

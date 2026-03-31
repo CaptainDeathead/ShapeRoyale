@@ -400,7 +400,7 @@ class MainMenu:
                                     current_squad = None
                                     for squad in self.active_squads:
                                         if i in squad:
-                                            print("Can't join_player - player already in a squad.")
+                                            #print("Can't join_player - player already in a squad.")
                                             in_squad = True
                                             current_squad = squad
                                             break
@@ -455,7 +455,7 @@ class MainMenu:
                                     for mem_index in active_squad:
                                         squad_info.append((self.player_info[mem_index]["name"], mem_index, self.player_info[mem_index]["ready"]))
 
-                                await self.server.sendall({"answer": {"squad_info": squad_info}})
+                                await client.send({"answer": {"squad_info": squad_info}})
 
                                 self.player_info[i] = {"ready": query["ready"], "name": player_name}
 
@@ -468,6 +468,9 @@ class MainMenu:
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
                 if self.join_player is not None and time() - last_squad_join_req > 0.5:
+                    import js
+                    js.console.log(f"Joining player: {self.join_player}")
+
                     self.client.send({"question": {"join_player": self.join_player}})
                     last_squad_join_req = time()
 
