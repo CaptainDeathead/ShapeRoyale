@@ -64,6 +64,7 @@ class BaseClient:
             self.raw_data_stream.append(json_data)
 
         print("Connection to client closed")
+        self.dead = True
         
     def sendnoto(self, json_data: dict[any, any]) -> None:
         self.send(json_data, to=False)

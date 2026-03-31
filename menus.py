@@ -125,6 +125,8 @@ class MainMenu:
         if self.server is not None and self.auto_start:
             ready_clients = []
             for i, client in enumerate(self.server.clients):
+                if client.dead: continue
+
                 ready = self.player_info.get(i, {}).get("ready", None)
                 if ready == False:
                     self.reset_timer()
@@ -152,6 +154,9 @@ class MainMenu:
                 for i, client in enumerate(self.server.clients):
                     if i not in self.player_info:
                         print(f"Excluding player {i} from the game due to no ready response.")
+                        clients_to_remove.append(client)
+                    elif client.dead:
+                        print(f"Excluding player {i} from the game due to a dead connection.")
                         clients_to_remove.append(client)
                 
                 for client in clients_to_remove:
@@ -453,6 +458,7 @@ class MainMenu:
                                 squad_info = []
                                 if active_squad is not None:
                                     for mem_index in active_squad:
+                                        if self.server.clients[mem_index].dead: continue
                                         squad_info.append((self.player_info[mem_index]["name"], mem_index, self.player_info[mem_index]["ready"]))
 
                                 await client.send({"answer": {"squad_info": squad_info}})
