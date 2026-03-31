@@ -216,7 +216,7 @@ class Client:
         return False
 
 class WebSocketClient:
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int, existing_uuid: str | None = None) -> None:
         self.HOST = host
         self.PORT = port
 
@@ -224,7 +224,13 @@ class WebSocketClient:
         self.base_client = None
 
         self.connected = False
-        self.uuid = str(uuid.uuid4())
+
+        import js
+        js.console.log(f"Given uuid: {existing_uuid}")
+        self.uuid = str(uuid.uuid4()) if existing_uuid is None else existing_uuid
+        js.console.log(f"Chosen uuid: {self.uuid}")
+
+        self.allow_reconnect = True
 
     def on_open(self, event):
         print("Connected")
@@ -259,7 +265,8 @@ class WebSocketClient:
         import js
         js.console.log(f"conn closed: {event.code}, {event.reason}")
 
-        asyncio.create_task(self.connect())
+        if self.allow_reconnect:
+            asyncio.create_task(self.connect())
 
     def send(self, data):
         import js
@@ -386,6 +393,7 @@ class WebSocketServer:
                             client.conn = ws
                             client.dead = False
                             print(f"Server - Client with uuid ({client_id}) reconnected!")
+                            await client.poll_recv()
                             return
 
                     await self.handler(ws, client_id)

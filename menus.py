@@ -81,7 +81,7 @@ class MainMenu:
         self.game_cfg_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Squad Size":"integer"}, visible=0)
 
         object_id = "#multiplayer_btn_red" if self.client is None and self.server is None else "#multiplayer_btn_green"
-        text = "Configure" if self.server is not None else "Multiplayer"
+        text = "Configure" if self.server is not None else "Invite" if self.client is not None else "Multiplayer"
         self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 150, display_surf.height - 250, 300, 75), text, self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
 
         self.leaderboard = Leaderboard(self.display_surf, self.manager, [{"name": "Uninitialised"}])
@@ -204,8 +204,8 @@ class MainMenu:
                                 self.spectating = True
                                 self.start_game = True
 
-                    self.manager.update(dt)
-                    self.manager.draw_ui(self.display_surf)
+                    #self.manager.update(dt)
+                    #self.manager.draw_ui(self.display_surf)
 
             self.start_game = True
 
@@ -283,6 +283,7 @@ class MainMenu:
             curr_y += shape_info_lbl.height + 5
 
     async def main(self) -> None:
+        last_squad_join_req = 0
         while not self.start_game:
             self.display_surf.fill((0, 0, 0))
             dt = self.clock.tick(60) / 1000.0
@@ -348,6 +349,11 @@ class MainMenu:
                             self.config_box.show()
                         elif self.server is not None:
                             self.game_cfg_box.show()
+                        elif self.client is not None:
+                            import js
+                            js.navigator.clipboard.writeText(f"{js.window.location.protocol}//{js.window.location.host}/?host={self.client.HOST}&port={self.client.PORT}&squadmate={self.client.uuid}")
+
+                            pygame_gui.windows.UIMessageWindow(pg.Rect(self.display_surf.width // 2 - 150, self.display_surf.height // 2 - 75, 300, 150), "Copied invite link to clipboard!", self.manager, window_title="Invite Players")
 
                 self.manager.process_events(event)
 
@@ -383,7 +389,7 @@ class MainMenu:
                         for dtype, query in message.items():
                             if dtype == "question":
                                 if "join_player" in query:
-                                    print("Received join_player question.")
+                                    #print("Received join_player question.")
                                     player_uuid = query["join_player"]
 
                                     if i not in self.player_info:
@@ -391,12 +397,14 @@ class MainMenu:
                                         continue
 
                                     in_squad = False
+                                    current_squad = None
                                     for squad in self.active_squads:
                                         if i in squad:
                                             print("Can't join_player - player already in a squad.")
                                             in_squad = True
+                                            current_squad = squad
                                             break
-                                    if in_squad: continue
+                                    #if in_squad: continue
 
                                     for j, other_client in enumerate(self.server.clients):
                                         if client == other_client: continue
@@ -405,18 +413,31 @@ class MainMenu:
                                             if j not in self.player_info:
                                                 break
 
-                                            in_squad = False
+                                            joined_squad = False
                                             for squad in self.active_squads:
                                                 if j in squad:
-                                                    in_squad = True
-                                                    squad.append(i)
-                                                    print("A player joined another player's squad!")
+                                                    joined_squad = True
+                                                    
+                                                    if in_squad:
+                                                        if current_squad != squad:
+                                                            squad.extend(current_squad)
+                                                            self.active_squads.remove(current_squad)
+                                                            print("Merged 2 squads!")
+                                                    else:
+                                                        squad.append(i)
+                                                        print("A player joined another player's squad!")
+
                                                     break
                                             
-                                            if not in_squad:
-                                                self.active_squads.append([j, i])
-                                                print("A player joined another player's squad!")
-                                                break
+                                            if not joined_squad:
+                                                if in_squad:
+                                                    current_squad.append(j)
+                                                    print("A player joined the joining players squad!")
+                                                else:
+                                                    self.active_squads.append([j, i])
+                                                    print("A new squad of 2 players was created!")
+
+                                            break
 
                             if "ready" in query:
                                 player_name = query["name"]
@@ -446,8 +467,9 @@ class MainMenu:
 
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
-                if self.join_player is not None and len(self.squad) == 0:
+                if self.join_player is not None and time() - last_squad_join_req > 0.5:
                     self.client.send({"question": {"join_player": self.join_player}})
+                    last_squad_join_req = time()
 
                 for message in self.client.base_client.data_stream:
                     for dtype, query in message.items():

@@ -188,9 +188,18 @@ class ShapeRoyale:
 
     async def run(self) -> None:
         if self.client is not None:
-            await self.join_server(self.client.HOST, self.client.PORT, self.player_name) # Client will be dead so we reset
+            await self.join_server(self.client.HOST, self.client.PORT, self.player_name, self.client.uuid) # Client will be dead so we reset
         elif self.server is not None:
             await self.host_server(self.server.HOST, self.server.PORT) # Server will be dead so we reset
+
+        if sys.platform == "emscripten":
+            import js
+            params = js.eval("new URLSearchParams(window.location.search)")
+            host = params.get("host")
+            port = params.get("port")
+
+            if host is not None and port is not None and self.client is None:
+                await self.join_server(host, port, self.player_name)
 
         if len(sys.argv) > 1:
             if sys.argv[1] == "host":
@@ -348,12 +357,12 @@ class ShapeRoyale:
         self.server = WebSocketServer(ip, port)
         self.server_task = asyncio.create_task(self.server.start())
 
-    async def join_server(self, ip: str, port: int, name: str) -> Client:
+    async def join_server(self, ip: str, port: int, name: str, existing_uuid: str | None = None) -> Client:
         self.screen.fill((0, 0, 0))
         loading_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("Connecting to server...", True, (255, 255, 255))
         self.screen.blit(loading_lbl, (self.WIDTH // 2 - loading_lbl.width // 2, self.HEIGHT // 2 - loading_lbl.height // 2))
 
-        self.client = WebSocketClient(ip, port)
+        self.client = WebSocketClient(ip, port, existing_uuid=existing_uuid)
         self.connect_task = asyncio.create_task(self.client.connect(max_retries=1))
         while not self.client.connected:
             dt = self.clock.tick(60) / 1000.0
@@ -1009,6 +1018,7 @@ class ShapeRoyale:
                         return
 
                 elif self.client is not None:
+                    self.client.allow_reconnect = False
                     self.connect_task.cancel()
 
                 self.end_screen.draw()
