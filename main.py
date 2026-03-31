@@ -435,8 +435,8 @@ class ShapeRoyale:
             #    squads.append(curr_squad)
             #    curr_squad = []
 
-        #for i in range(len(shapes), self.NUM_PLAYERS):
-        for i in range(0):
+        for i in range(len(shapes), self.NUM_PLAYERS):
+        #for i in range(0):
             name = choice(self.shape_names)
             new_shape = Shape(
                 self.MAP_SIZE, randint(3000, self.MAP_SIZE_X-3000), randint(3000, self.MAP_SIZE_Y-3000), i, name, self.shape_info, self.shape_images[f"{name}Friendly"],
@@ -496,13 +496,16 @@ class ShapeRoyale:
             done = False
             import js
             js.console.log("waiting for first main info")
+            
+            last_info_req = 0
             while not done:
                 #self.client.send({"answer": {"send_starting_info": {"shape_index": self.main_menu.player.shape_index, "name": self.player_name}}})
                 await asyncio.sleep(0)
 
-                if self.spectating:
+                if self.spectating and time() - last_info_req > 0.5:
                     js.console.log("Requesting starting info")
                     self.client.send({"answer": {"send_starting_info": {"shape_index": self.main_menu.player.shape_index, "name": self.player_name}}})
+                    last_info_req = time()
 
                 for message in self.client.base_client.data_stream:
                     for dtype, query in message.items():
@@ -510,18 +513,21 @@ class ShapeRoyale:
                             continue
 
                         if "powerup_set" in query:
+                            js.console.log("Received powerup_set")
                             if query["powerup_set"]["stage"] == 1:
                                 self.powerups = await self.generate_powerups(query["powerup_set"]["seed"])
                             else:
                                 self.powerups.extend(await self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
 
                         elif "player_set" in query:
+                            js.console.log("Received player_set")
                             self.players = [Shape(self.MAP_SIZE, player_desc["x"], player_desc["y"], player_desc["index"], player_desc["shape_name"], self.shape_info, self.shape_images[f"{player_desc["shape_name"]}Friendly"], self.shape_images[f"{player_desc["shape_name"]}Enemy"], self.bullets, self.bullet_img, player_desc["is_player"], player_desc["squad"], None, player_desc["player_name"]) for player_desc in query["player_set"]]
                             for player in self.players:
                                 player.last_update = time()
                                 player.squad = [self.get_player(squad_member) for squad_member in player.squad]
 
                         elif "player_index" in query:
+                            js.console.log("Received player_index")
                             self.spectator_index = query["player_index"]
                             #self.spectating = True
 
@@ -531,6 +537,7 @@ class ShapeRoyale:
                         if self.powerups != [] and self.players != [] and self.spectator_index != 0: done = True
 
             print(self.players, self.spectator_index)
+            js.console.log("Received all starting info.")
 
             self.player.squad.append(self.player)
             self.starting_player = self.players[self.spectator_index]
