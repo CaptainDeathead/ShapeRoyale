@@ -780,10 +780,15 @@ class ShapeRoyale:
             keys = pg.key.get_pressed()
 
             if not self.spectating:
-                if keys[pg.K_UP] or keys[pg.K_w]: self.player.move_up(dt)
-                elif keys[pg.K_RIGHT] or keys[pg.K_d]: self.player.move_right(dt)
-                elif keys[pg.K_DOWN] or keys[pg.K_s]: self.player.move_down(dt)
-                elif keys[pg.K_LEFT] or keys[pg.K_a]: self.player.move_left(dt)
+                if keys[pg.K_w]: self.player.move_up(dt)
+                elif keys[pg.K_d]: self.player.move_right(dt)
+                elif keys[pg.K_s]: self.player.move_down(dt)
+                elif keys[pg.K_a]: self.player.move_left(dt)
+
+                if keys[pg.K_UP]: self.player.rotation = 0
+                elif keys[pg.K_RIGHT]: self.player.rotation = 270
+                elif keys[pg.K_DOWN]: self.player.rotation = 180
+                elif keys[pg.K_LEFT]: self.player.rotation = 90
 
                 if self.client is not None:
                     if not self.spectating:
