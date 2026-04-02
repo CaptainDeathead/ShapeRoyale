@@ -763,6 +763,18 @@ class ShapeRoyale:
             self.safezone.update(dt)
 
             self.screen.fill((0, 0, 0))
+
+            gridline_spacing = 400
+            shifted_player_x = int(self.player.x - self.player.x % gridline_spacing)
+            for x in range(shifted_player_x, shifted_player_x + self.WIDTH + gridline_spacing, gridline_spacing):
+                offset_x = (x - self.player.x)
+                pg.draw.line(self.screen, (100, 100, 100), (offset_x, 0), (offset_x, self.HEIGHT), width=2)
+
+            shifted_player_y = int(self.player.y - self.player.y % gridline_spacing)
+            for y in range(shifted_player_y, shifted_player_y + self.HEIGHT + gridline_spacing, gridline_spacing):
+                offset_y = (y - self.player.y)
+                pg.draw.line(self.screen, (100, 100, 100), (0, offset_y), (self.WIDTH, offset_y), width=2)
+
             self.safezone.blit(self.screen, self.player)
 
             x_walls_dist = self.safezone.right_wall - self.safezone.left_wall
