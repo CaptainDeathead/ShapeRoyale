@@ -400,8 +400,8 @@ class Shape:
 
         self.render_info_surf()
 
-    def draw(self, screen: pg.Surface, draw_parent: any) -> None:
-        if draw_parent in self.squad:
+    def draw(self, screen: pg.Surface, draw_parent: any, squad: List[Player]) -> None:
+        if self in squad:
             image = self.rotated_shape_image
         else:
             image = self.rotated_enemy_shape_image
