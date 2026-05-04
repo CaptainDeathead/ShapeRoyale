@@ -19,7 +19,7 @@ from networking import Server, Client, BaseClient, WebSocketServer, WebSocketCli
 
 from time import time, sleep
 from json import loads
-from math import dist, sqrt, floor, ceil
+from math import dist, sqrt, floor, ceil, atan2, degrees
 from random import randint, choice, uniform, Random, randrange
 
 from copy import deepcopy
@@ -800,14 +800,17 @@ class ShapeRoyale:
 
             if not self.spectating:
                 if keys[pg.K_w]: self.player.move_up(dt)
-                elif keys[pg.K_d]: self.player.move_right(dt)
-                elif keys[pg.K_s]: self.player.move_down(dt)
-                elif keys[pg.K_a]: self.player.move_left(dt)
+                if keys[pg.K_d]: self.player.move_right(dt)
+                if keys[pg.K_s]: self.player.move_down(dt)
+                if keys[pg.K_a]: self.player.move_left(dt)
 
                 if keys[pg.K_UP]: self.player.rotation = 0
                 elif keys[pg.K_RIGHT]: self.player.rotation = 270
                 elif keys[pg.K_DOWN]: self.player.rotation = 180
                 elif keys[pg.K_LEFT]: self.player.rotation = 90
+
+                mx, my = pg.mouse.get_pos()
+                self.player.rotation = -degrees(atan2((self.HEIGHT / 2 - my), (self.WIDTH / 2 - mx))) + 90
 
                 if self.client is not None:
                     if not self.spectating:

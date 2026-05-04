@@ -7,7 +7,7 @@ from networking import Client, BaseClient
 
 from utils import FONTS_PATH, obj_dist
 
-from math import dist
+from math import dist, cos, sin, radians
 from random import randint
 from time import time
 from typing import List, Tuple, Dict
@@ -55,6 +55,7 @@ class Shape:
         self.y = y
         self.index = index
         self.rotation = 0
+        self.vel = pg.Vector2(0, 0)
 
         self.shape_name = shape_name
         self.shape_info = shape_info
@@ -233,19 +234,19 @@ class Shape:
         self.shield = min(self.max_shield, self.shield + hp)
 
     def move_up(self, dt: float) -> None:
-        self.y -= self.max_speed * dt * 30
+        self.vel.y -= self.max_speed * dt * 30
         self.rotation = 0
 
     def move_right(self, dt: float) -> None:
-        self.x += self.max_speed * dt * 30
+        self.vel.x += self.max_speed * dt * 30
         self.rotation = 270
 
     def move_down(self, dt: float) -> None:
-        self.y += self.max_speed * dt * 30
+        self.vel.y += self.max_speed * dt * 30
         self.rotation = 180
 
     def move_left(self, dt: float) -> None:
-        self.x -= self.max_speed * dt * 30
+        self.vel.x -= self.max_speed * dt * 30
         self.rotation = 90
 
     def move_to(self, x: float, y: float, dt: float) -> None:
@@ -290,6 +291,16 @@ class Shape:
                 case 90: bullet_vel = [-self.max_speed * (self.bullet_speed + 1) / 2.5, 0]
                 case 180: bullet_vel = [0, self.max_speed * (self.bullet_speed + 1) / 2.5]
                 case 270: bullet_vel = [self.max_speed * (self.bullet_speed + 1) / 2.5, 0]
+
+            full_vel = pg.Vector2(0, 0)
+            if self.vel.length() > 0:
+                norm_vel = self.vel.normalize()
+                full_vel = norm_vel * self.max_speed / 2
+
+            rot = full_vel.angle
+            if self.player_name == 'player':
+                print(rot, -self.rotation + 90)
+            bullet_vel = [cos(radians(-self.rotation + 90)) * -self.max_speed * (self.bullet_speed + 1) / 2.5 + full_vel.x * 6, sin(radians(-self.rotation + 90)) * -self.max_speed * (self.bullet_speed + 1) / 2.5 + full_vel.y * 6]
 
             self.bullets.append(Bullet(self, self.x, self.y, bullet_vel, self.damage, self.damage_growth, self.poison_damage, self.penetration, self.lifesteal, self.bullet_img))
             self.shots_fired += 1
@@ -397,6 +408,15 @@ class Shape:
 
         self.rotated_shape_image = pg.transform.rotate(self.shape_image, self.rotation)
         self.rotated_enemy_shape_image = pg.transform.rotate(self.enemy_shape_image, self.rotation)
+
+        if self.vel.length() > 0:
+            norm_vel = self.vel.normalize()
+            full_vel = norm_vel * self.max_speed / 2
+            self.x += full_vel.x
+            self.y += full_vel.y
+
+        self.vel.x = 0
+        self.vel.y = 0
 
         self.render_info_surf()
 
