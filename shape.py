@@ -411,7 +411,7 @@ class Shape:
 
         if self.vel.length() > 0:
             norm_vel = self.vel.normalize()
-            full_vel = norm_vel * self.max_speed / 2
+            full_vel = norm_vel * self.max_speed * dt * 30
             self.x += full_vel.x
             self.y += full_vel.y
 
