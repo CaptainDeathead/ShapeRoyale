@@ -11,6 +11,7 @@ from bullet import Bullet
 from shape import Player, Shape
 from powerups import Powerup
 from utils import AnimManager, FONTS_PATH
+from eventfeed import EventFeed, GameEvent
 
 from leaderboard import Leaderboard
 
@@ -178,6 +179,7 @@ class ShapeRoyale:
             self.screen = display_surf
 
         self.anim_manager = AnimManager()
+        self.eventfeed = EventFeed(self.screen, pg.Font(f"{FONTS_PATH}/PressStart2P.ttf", 20))
 
         self.server = server
         self.client = client
@@ -549,6 +551,7 @@ class ShapeRoyale:
 
         print("on")
         self.spectator_player = self.player
+        starting_player = self.player
         while 1:
             await asyncio.sleep(0)
 
@@ -630,6 +633,8 @@ class ShapeRoyale:
 
                                 self.players.remove(target_player)
                                 self.dead_players.append(target_player)
+
+                                self.eventfeed.add(GameEvent(f"{target_player.player_name} was killed.", (0, 0, 255) if target_player in starting_player.squad else (255, 0, 0)))
 
                         if "set_bullets" in query:
                             update = query["set_bullets"]
@@ -832,6 +837,15 @@ class ShapeRoyale:
                 bullet.move(dt)
 
             for i, player in enumerate(self.players):
+                if len(player.squad) == len(self.players):
+                    # TODO: Verify this works
+                    # FREE FOR ALL
+                    for squad_member in player.squad:
+                        if squad_member == player: continue
+                        squad_member.squad = []
+                    
+                    player.squad = []
+
                 #player.shoot()
                 player.update(dt)
 
@@ -923,7 +937,7 @@ class ShapeRoyale:
                     #pg.draw.circle(self.screen, (255, 255, 255), (closest_powerup.x - closest_powerup.image.width // 2 - (player.x - self.WIDTH // 2 + closest_powerup.image.width // 2), closest_powerup.y - closest_powerup.image.height // 2 - (player.y - self.HEIGHT // 2 + closest_powerup.image.height // 2)), 5)
 
                 player.set_close_powerups(close_powerups)
-                player.draw(self.screen, self.player)
+                player.draw(self.screen, self.player, starting_player.squad)
 
                 closest_player = None
                 closest_dist = float('inf')
@@ -961,6 +975,7 @@ class ShapeRoyale:
 
                 if player.dead and self.client is None:
                     dead_players.append(player)
+                    self.eventfeed.add(GameEvent(f"{player.player_name} was killed.", (0, 0, 255) if player in starting_player.squad else (255, 0, 0)))
 
                 if self.client is not None:
                     if time() - player.last_update > 3:
@@ -1010,7 +1025,8 @@ class ShapeRoyale:
             pg.draw.rect(self.minimap_surf, (0, 0, 255), (self.player.x / self.MAP_SIZE * 200 - 3, self.player.y / self.MAP_SIZE * 200 - 3, 6, 6))
 
             for friendly in self.player.squad:
-                pg.draw.rect(self.minimap_surf, (0, 255, 0), (friendly.x / self.MAP_SIZE * 200 - 2, friendly.y / self.MAP_SIZE * 200 - 2, 3, 3))
+                if friendly == self.player: continue
+                pg.draw.rect(self.minimap_surf, (0, 255, 0), (friendly.x / self.MAP_SIZE * 200 - 2, friendly.y / self.MAP_SIZE * 200 - 2, 4, 4))
 
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
@@ -1018,8 +1034,10 @@ class ShapeRoyale:
             if self.spectating:
                 self.screen.blit(self.spectating_lbl, (self.WIDTH / 2 - self.spectating_lbl.width / 2, 50))
 
-            self.screen.blit(self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255)), (20, 20))
-            self.screen.blit(self.fps_font.render(f"{self.spectator_index+1}/{len(self.players)}", True, (255, 255, 255)), (20, 40))
+            fps_lbl = self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255))
+            alive_lbl = self.fps_font.render(f"{len(self.players)} alive", True, (255, 255, 255))
+            self.screen.blit(fps_lbl, (self.WIDTH - fps_lbl.width - 10, 10))
+            self.screen.blit(alive_lbl, (self.WIDTH - 50 - alive_lbl.width, 260))
 
             self.powerup_section_index += 1
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0
@@ -1060,6 +1078,7 @@ class ShapeRoyale:
                         all_players.extend(list(reversed(self.dead_players)))
                         self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
 
+            self.eventfeed.update(dt)
             self.manager.draw_ui(self.screen)
 
             pg.display.flip()

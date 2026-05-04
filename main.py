@@ -837,6 +837,15 @@ class ShapeRoyale:
                 bullet.move(dt)
 
             for i, player in enumerate(self.players):
+                if len(player.squad) == len(self.players):
+                    # TODO: Verify this works
+                    # FREE FOR ALL
+                    for squad_member in player.squad:
+                        if squad_member == player: continue
+                        squad_member.squad = []
+                    
+                    player.squad = []
+
                 #player.shoot()
                 player.update(dt)
 
