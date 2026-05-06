@@ -828,7 +828,7 @@ class ShapeRoyale:
                     if not self.spectating:
                         self.client.send({"answer": {"player_pos_update": {"x": self.player.x, "y": self.player.y, "rotation": self.player.rotation, "index": self.player.index, "vel": tuple(self.player.vel)}}})
 
-                if keys[pg.K_SPACE]:
+                if keys[pg.K_SPACE] or pg.mouse.get_pressed()[0]:
                     if self.player.shoot():
                         self.sounds["laserShoot"].play()
                     
@@ -1057,10 +1057,10 @@ class ShapeRoyale:
 
             fps_lbl = self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255))
             alive_lbl = self.fps_font.render(f"{len(self.players)} alive", True, (255, 255, 255))
-            ping_lbl = self.fps_font.render(f"{int(self.ping*1000)}ms", True, (255*min(self.ping, 1), 255*min(1/self.ping + 0.00000000000001, 1), 0))
+            ping_lbl = self.fps_font.render(f"{int(self.ping*1000)}ms", True, (255*min(self.ping, 1), 255*min(1/(self.ping + 0.00000000000001), 1), 0))
             self.screen.blit(fps_lbl, (self.WIDTH - fps_lbl.width - 10, 10))
             self.screen.blit(alive_lbl, (self.WIDTH - 50 - alive_lbl.width, 260))
-            self.screen.blit(ping_lbl, (self.WIDTH - 50 - ping_lbl.width, 270))
+            self.screen.blit(ping_lbl, (self.WIDTH - 50 - ping_lbl.width, 280))
 
             self.powerup_section_index += 1
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0

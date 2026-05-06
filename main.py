@@ -828,7 +828,7 @@ class ShapeRoyale:
                     if not self.spectating:
                         self.client.send({"answer": {"player_pos_update": {"x": self.player.x, "y": self.player.y, "rotation": self.player.rotation, "index": self.player.index, "vel": tuple(self.player.vel)}}})
 
-                if keys[pg.K_SPACE]:
+                if keys[pg.K_SPACE] or pg.mouse.get_pressed()[0]:
                     if self.player.shoot():
                         self.sounds["laserShoot"].play()
                     
