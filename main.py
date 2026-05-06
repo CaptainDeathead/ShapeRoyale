@@ -699,6 +699,9 @@ class ShapeRoyale:
 
                                     if target_player is not None:
                                         for key, value in update.items():
+                                            match key:
+                                                case "vel": value = pg.Vector2(value[0], value[1])
+
                                             setattr(target_player, key, value)
 
                                 elif "player_shoot" in query:
@@ -814,7 +817,7 @@ class ShapeRoyale:
 
                 if self.client is not None:
                     if not self.spectating:
-                        self.client.send({"answer": {"player_pos_update": {"x": self.player.x, "y": self.player.y, "rotation": self.player.rotation, "index": self.player.index}}})
+                        self.client.send({"answer": {"player_pos_update": {"x": self.player.x, "y": self.player.y, "rotation": self.player.rotation, "index": self.player.index, "vel": tuple(self.player.vel)}}})
 
                 if keys[pg.K_SPACE]:
                     if self.player.shoot():
@@ -845,9 +848,9 @@ class ShapeRoyale:
                     # FREE FOR ALL
                     for squad_member in player.squad:
                         if squad_member == player: continue
-                        squad_member.squad = []
+                        squad_member.squad = [squad_member]
                     
-                    player.squad = []
+                    player.squad = [player]
 
                 #player.shoot()
                 player.update(dt)
@@ -982,7 +985,9 @@ class ShapeRoyale:
 
                 if self.client is not None:
                     if time() - player.last_update > 3:
-                        player.x = -1000
+                        if len(self.eventfeed.event_queue) < 10:
+                            self.eventfeed.add(GameEvent("Slow connection!", pg.Color(255, 150, 0)))
+                        #player.x = -1000
 
             for dead_player in dead_players:
                 if len(self.players) == 1: continue
