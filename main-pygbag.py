@@ -308,6 +308,9 @@ class ShapeRoyale:
         self.fps_font = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 15)
         self.spectating_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("You are spectating!", True, (255, 255, 255))
 
+        self.ping = 0
+        self.last_ping = 0
+
         self.spectator_index = 0
         self.spectating = self.main_menu.spectating
         self.spectator_player = None
@@ -684,6 +687,9 @@ class ShapeRoyale:
                                 self.NUM_POWERUPS = self.NUM_POWERUP_SECTIONS * 10
                                 self.powerups.extend(await self.generate_powerups(query["powerup_set"]["seed"], self.NUM_POWERUPS, int(self.safezone.left_wall), int(self.safezone.right_wall), int(self.safezone.top_wall), int(self.safezone.bottom_wall)))
 
+                        if "ping" in query:
+                            self.ping = time() - query["ping"]
+
             elif self.server is not None:
                 for client in self.server.clients:
                     for message in client.data_stream:
@@ -699,6 +705,9 @@ class ShapeRoyale:
 
                                     if target_player is not None:
                                         for key, value in update.items():
+                                            match key:
+                                                case "vel": value = pg.Vector2(value[0], value[1])
+
                                             setattr(target_player, key, value)
 
                                 elif "player_shoot" in query:
@@ -723,6 +732,9 @@ class ShapeRoyale:
                                 if "player_set" in query:
                                     player_data = [player.to_dict() for player in self.players]
                                     await client.send({"answer": {"player_set": player_data}})
+
+                                elif "ping" in query:
+                                    await client.send({"answer": {"ping": query["ping"]}})
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -845,9 +857,9 @@ class ShapeRoyale:
                     # FREE FOR ALL
                     for squad_member in player.squad:
                         if squad_member == player: continue
-                        squad_member.squad = []
+                        squad_member.squad = [squad_member]
                     
-                    player.squad = []
+                    player.squad = [player]
 
                 #player.shoot()
                 player.update(dt)
@@ -981,8 +993,14 @@ class ShapeRoyale:
                     self.eventfeed.add(GameEvent(f"{player.player_name} was killed.", (0, 0, 255) if player in starting_player.squad else (255, 0, 0)))
 
                 if self.client is not None:
+                    if time() - self.last_ping > 1:
+                        self.client.send({"question": {"ping": time()}})
+                        self.last_ping = time()
+
                     if time() - player.last_update > 3:
-                        player.x = -1000
+                        if len(self.eventfeed.event_queue) < 10:
+                            self.eventfeed.add(GameEvent("Slow connection!", pg.Color(255, 150, 0)))
+                        #player.x = -1000
 
             for dead_player in dead_players:
                 if len(self.players) == 1: continue
@@ -1039,8 +1057,10 @@ class ShapeRoyale:
 
             fps_lbl = self.fps_font.render(f"{self.clock.get_fps():.2f}", True, (255, 255, 255))
             alive_lbl = self.fps_font.render(f"{len(self.players)} alive", True, (255, 255, 255))
+            ping_lbl = self.fps_font.render(f"{int(self.ping*1000)}ms", True, (255*min(self.ping, 1), 255*min(1/self.ping + 0.00000000000001, 1), 0))
             self.screen.blit(fps_lbl, (self.WIDTH - fps_lbl.width - 10, 10))
             self.screen.blit(alive_lbl, (self.WIDTH - 50 - alive_lbl.width, 260))
+            self.screen.blit(ping_lbl, (self.WIDTH - 50 - ping_lbl.width, 270))
 
             self.powerup_section_index += 1
             if self.powerup_section_index >= self.NUM_POWERUP_SECTIONS: self.powerup_section_index = 0
