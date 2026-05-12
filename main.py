@@ -427,6 +427,7 @@ class ShapeRoyale:
             )
             
             curr_squad = []
+            print(f"Squads: {self.main_menu.active_squads}")
             for squad_index, squad in enumerate(self.main_menu.active_squads):
                 if i-1 in squad: # i-1 because the server has been inserted first into the indexes (trust me)
                     curr_squad = squads[squad_index]
@@ -550,7 +551,7 @@ class ShapeRoyale:
             self.starting_player = self.players[self.spectator_index]
 
         if self.server is not None:
-            await asyncio.sleep(1) # Give clients time to catch up
+            await asyncio.sleep(2) # Give clients time to catch up
 
         print("on")
         self.spectator_player = self.player
@@ -622,6 +623,8 @@ class ShapeRoyale:
                             if target_player is not None:
                                 for key, value in update.items():
                                     setattr(target_player, key, value)
+
+                                self.players = [target_player]
 
                         if "player_remove" in query:
                             target_player = None

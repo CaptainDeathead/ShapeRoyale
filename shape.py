@@ -415,8 +415,9 @@ class Shape:
             self.x += full_vel.x
             self.y += full_vel.y
 
-        self.vel.x = 0
-        self.vel.y = 0
+        if self.client is None: # Let networked players control their own shooting so bullets have the right velocity
+            self.vel.x = 0
+            self.vel.y = 0
 
         self.render_info_surf()
 

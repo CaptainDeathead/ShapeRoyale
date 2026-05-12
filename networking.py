@@ -231,7 +231,15 @@ class WebSocketClient:
         import js
         js.console.log(f"Given uuid: {existing_uuid}")
         self.uuid = str(uuid.uuid4()) if existing_uuid is None else existing_uuid
+
+        stored_uuid = js.localStorage.getItem("uuid")
+        print(f"Stored uuid: {stored_uuid}")
+
+        if stored_uuid:
+            self.uuid = stored_uuid
+
         js.console.log(f"Chosen uuid: {self.uuid}")
+        js.localStorage.setItem("uuid", self.uuid)
 
         self.allow_reconnect = True
 
