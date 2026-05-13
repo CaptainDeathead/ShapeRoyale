@@ -362,23 +362,27 @@ class Shape:
         if closest_bullet is not None:
             bullet_dist = obj_dist(closest_bullet, self)
 
-        for i, wall_distance in enumerate(wall_distances):
-            if abs(wall_distance) > 0.005: continue
+        try:
+            for i, wall_distance in enumerate(wall_distances):
+                if abs(wall_distance) > 0.005: continue
 
-            match i:
-                case 0:
-                    self.move_left(dt)
-                    self.target = (randint(wall_positions[0], wall_positions[1]), self.y)
-                case 1:
-                    self.move_right(dt)
-                    self.target = (randint(wall_positions[0], wall_positions[1]), self.y)
-                case 2:
-                    self.move_up(dt)
-                    self.target = (self.x, randint(wall_positions[2], wall_positions[3]))
-                case 3:
-                    self.move_down(dt)
-                    self.target = (self.x, randint(wall_positions[2], wall_positions[3]))
-            return
+                match i:
+                    case 0:
+                        self.move_left(dt)
+                        self.target = (randint(wall_positions[0], wall_positions[1]), self.y)
+                    case 1:
+                        self.move_right(dt)
+                        self.target = (randint(wall_positions[0], wall_positions[1]), self.y)
+                    case 2:
+                        self.move_up(dt)
+                        self.target = (self.x, randint(wall_positions[2], wall_positions[3]))
+                    case 3:
+                        self.move_down(dt)
+                        self.target = (self.x, randint(wall_positions[2], wall_positions[3]))
+                return
+
+        except Exception as e:
+            ...
 
         if player_dist < 1000:
             self.fight_player(dt, closest_player)

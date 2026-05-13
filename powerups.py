@@ -24,6 +24,10 @@ class Poison:
             self.duration -= time() - self.last_tick_time
             self.last_tick_time = time()
 
+            if self.parent is None or self.parent.dead:
+                self.on_poison_end(self)
+                return
+
             self.deal_damage_func(self.damage)
             if self.parent is not None:
                 self.parent.give_lifesteal(self.damage * self.lifesteal)

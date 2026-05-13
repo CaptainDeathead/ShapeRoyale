@@ -63,7 +63,7 @@ class Safezone:
     DISTANCE_TO_MOVE_REDUCTION = 1000
     TARGET_RADIUS_ALLOWANCE = 1.05
     SCALING = 80
-    SPEED = 50
+    SPEED = 100
 
     def __init__(self, screen_width: int, screen_height: int, map_size_x: int, map_size_y: int, phase_config: Dict[int, Dict]) -> None:
         self.screen_width = screen_width
@@ -94,6 +94,8 @@ class Safezone:
         if self.phase_index >= len(self.phase_config):
             self.target_radius = 0
             return
+
+        if self.phase_index > 0: return
 
         self.phase_index += 1
 
