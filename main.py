@@ -166,6 +166,8 @@ class ShapeRoyale:
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
+    BG_COLOR = (0, 0, 0)
+
     def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None, server: Server | None = None, main_menu_manager: pygame_gui.UIManager | None = None) -> None:
         if not (self.NUM_POWERUPS / self.NUM_POWERUP_SECTIONS).is_integer() or self.NUM_POWERUPS % self.NUM_POWERUP_SECTIONS != 0:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
@@ -775,7 +777,8 @@ class ShapeRoyale:
                             await self.restart()
                             return
 
-                if event.type == pg.MOUSEBUTTONDOWN:
+                if event.type == pg.FINGERDOWN:
+                    self.BG_COLOR = (255, 0, 0)
                     fingermotion_events.append((event.x, event.y, 0))
 
                 self.manager.process_events(event)
@@ -796,7 +799,7 @@ class ShapeRoyale:
             self.anim_manager.update(dt)
             self.safezone.update(dt)
 
-            self.screen.fill((0, 0, 0))
+            self.screen.fill(self.BG_COLOR)
 
             gridline_spacing = 400
             shifted_player_x = int(self.player.x - self.player.x % gridline_spacing)
