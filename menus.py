@@ -80,8 +80,8 @@ class MainMenu:
         self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Server IP":"short_text(default='wssr.plazmasoftware.com')", "Server Port":"integer", "Host":"boolean(default=False)"}, visible=0)
         self.game_cfg_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Squad Size":"integer"}, visible=0)
 
-        self.left_btn = pygame_gui.elements.UIButton(pg.Rect(self.width // 2 - 350 // 2 - 50, 200 + 250, 40, 40), "<", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#card_btn"))
-        self.right_btn = pygame_gui.elements.UIButton(pg.Rect(self.width // 2 + 350 // 2 + 10, 200 + 250, 40, 40), ">", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#card_btn"))
+        self.left_btn = pygame_gui.elements.UIButton(pg.Rect(self.width // 2 - 350 // 2 - 90, 200 + 250, 80, 80), "<", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#card_btn"))
+        self.right_btn = pygame_gui.elements.UIButton(pg.Rect(self.width // 2 + 350 // 2 + 10, 200 + 250, 80, 80), ">", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#card_btn"))
 
         object_id = "#multiplayer_btn_red" if self.client is None and self.server is None else "#multiplayer_btn_green"
         text = "Configure" if self.server is not None else "Invite" if self.client is not None else "Multiplayer"

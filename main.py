@@ -1145,15 +1145,15 @@ class ShapeRoyale:
                 if not hasattr(self, "leaderboard"):
                     all_players = [player for player in self.players]
                     all_players.extend(list(reversed(self.dead_players)))
-                    self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+                    #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
                 else:
                     if self.leaderboard is None:
                         all_players = [player for player in self.players]
                         all_players.extend(list(reversed(self.dead_players)))
-                        self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+                        #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
 
                 # Disable leaderboard because its annoying
-                self.leaderboard = None
+                #self.leaderboard = None
 
             self.eventfeed.update(dt)
             self.manager.draw_ui(self.screen)
