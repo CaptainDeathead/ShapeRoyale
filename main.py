@@ -779,9 +779,9 @@ class ShapeRoyale:
 
                 if event.type == pg.FINGERMOTION:
                     self.BG_COLOR = (255, 0, 0)
-                    fingermotion_events.append((event.x, event.y, 0))
+                    fingermotion_events.append((event.x*self.WIDTH, event.y*self.HEIGHT, 0))
                     import js
-                    js.console.log(f"X: {event.x}, Y: {event.y}")
+                    js.console.log(f"X: {event.x*self.WIDTH}, Y: {event.y*self.HEIGHT}")
 
                 self.manager.process_events(event)
 
