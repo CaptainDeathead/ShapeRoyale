@@ -332,6 +332,8 @@ class ShapeRoyale:
         self.movement_joystick = TouchJoystick(self.screen, (300, self.screen.height - 300))
         #self.aim_joystick = TouchJoystick(self.screen, (self.screen.width - 300, self.screen.height - 300))
 
+        self.active_fingers = {}
+
         #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in self.players])
         #self.leaderboard.window.hide()
 
@@ -747,7 +749,6 @@ class ShapeRoyale:
                                 elif "ping" in query:
                                     await client.send({"answer": {"ping": query["ping"]}})
 
-            fingermotion_events = []
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     if self.server is not None:
@@ -777,9 +778,15 @@ class ShapeRoyale:
                             await self.restart()
                             return
 
+                if event.type == pg.FINGERUP:
+                    if event.finger_id in self.active_fingers:
+                        del self.active_fingers[event.finger_id]
+
+                if event.type == pg.FINGERDOWN:
+                    self.active_fingers[event.finger_id] = (event.x*self.WIDTH, event.y*self.HEIGHT)
+
                 if event.type == pg.FINGERMOTION:
-                    self.BG_COLOR = (255, 0, 0)
-                    fingermotion_events.append((event.x*self.WIDTH, event.y*self.HEIGHT, 0))
+                    self.active_fingers[event.finger_id] = (event.x*self.WIDTH, event.y*self.HEIGHT)
                     import js
                     js.console.log(f"X: {event.x*self.WIDTH}, Y: {event.y*self.HEIGHT}")
 
@@ -1090,7 +1097,7 @@ class ShapeRoyale:
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
 
-            self.movement_joystick.draw(fingermotion_events)
+            self.movement_joystick.draw([(x, y, finger_id) for finger_id, (x, y) in self.active_fingers.values()])
             #self.aim_joystick.draw(fingermotion_events)
 
             if self.spectating:
