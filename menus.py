@@ -77,12 +77,17 @@ class MainMenu:
         self.squad_size = 1
 
         half_width = self.display_surf.width // 2
-        self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Server IP":"short_text", "Server Port":"integer", "Host":"boolean(default=False)"}, visible=0)
+        self.config_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Server IP":"short_text(default='wssr.plazmasoftware.com')", "Server Port":"integer", "Host":"boolean(default=False)"}, visible=0)
         self.game_cfg_box = pygame_gui.elements.UIForm(pg.Rect(half_width - 200, 350, 400, 300), {"Squad Size":"integer"}, visible=0)
+
+        self.left_btn = pygame_gui.elements.UIButton(pg.Rect(self.width // 2 - 350 // 2 - 50, 200 + 250, 40, 40), "<", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#card_btn"))
+        self.right_btn = pygame_gui.elements.UIButton(pg.Rect(self.width // 2 + 350 // 2 + 10, 200 + 250, 40, 40), ">", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#card_btn"))
 
         object_id = "#multiplayer_btn_red" if self.client is None and self.server is None else "#multiplayer_btn_green"
         text = "Configure" if self.server is not None else "Invite" if self.client is not None else "Multiplayer"
-        self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 150, display_surf.height - 250, 300, 75), text, self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
+        self.multiplayer_btn = pygame_gui.elements.UIButton(pg.Rect(half_width - 310, display_surf.height - 250, 300, 75), text, self.manager, object_id=pygame_gui.core.ObjectID(object_id=object_id))
+
+        self.ready_btn = pygame_gui.elements.UIButton(pg.Rect(half_width + 10, display_surf.height - 250, 300, 75), "Ready up!", self.manager, object_id=pygame_gui.core.ObjectID(object_id="#multiplayer_btn_red"))
 
         self.leaderboard = Leaderboard(self.display_surf, self.manager, [{"name": "Uninitialised"}])
         self.leaderboard.window.hide()
@@ -287,6 +292,30 @@ class MainMenu:
             self.display_surf.blit(shape_info_lbl, (x + card_w // 2 - largest_width // 2, curr_y))
             curr_y += shape_info_lbl.height + 5
 
+    def setup_multiplayer_connect(self) -> None:
+        values = self.config_box.get_current_values()
+        self.server_ip = values["Server IP"]
+        self.server_port = int(values["Server Port"])
+        self.host = values["Host"]
+
+        self.config_box.hide()
+        self.singleplayer = False
+
+        if self.name_entry is not None:
+            self.player_name = self.name_entry.get_text()
+
+    def toggle_ready(self) -> None:
+        self.player.ready = not self.player.ready
+
+        if self.player.ready:
+            self.ready_btn.text = "Unready."
+            self.ready_btn.change_object_id(pygame_gui.core.ObjectID(object_id="#multiplayer_btn_green"))
+            self.name_entry.disable()
+        else:
+            self.ready_btn.text = "Ready up!"
+            self.ready_btn.change_object_id(pygame_gui.core.ObjectID(object_id="#multiplayer_btn_red"))
+            self.name_entry.enable()
+
     async def main(self) -> None:
         last_squad_join_req = 0
         while not self.start_game:
@@ -304,8 +333,7 @@ class MainMenu:
  
                 elif event.type == pg.KEYDOWN:
                     if event.key == pg.K_RETURN:
-                        self.player.ready = not self.player.ready
-                        self.name_entry.disable()
+                        self.toggle_ready()
                     elif event.key == pg.K_LEFT:
                         self.player.shape_index -= 1
                         if self.player.shape_index < 0:
@@ -326,16 +354,7 @@ class MainMenu:
 
                 elif event.type == pygame_gui.UI_FORM_SUBMITTED:
                     if event.ui_element == self.config_box:
-                        values = self.config_box.get_current_values()
-                        self.server_ip = values["Server IP"]
-                        self.server_port = int(values["Server Port"])
-                        self.host = values["Host"]
-
-                        self.config_box.hide()
-                        self.singleplayer = False
-
-                        if self.name_entry is not None:
-                            self.player_name = self.name_entry.get_text()
+                        self.setup_multiplayer_connect()
                         return
 
                     elif event.ui_element == self.game_cfg_box:
@@ -351,7 +370,9 @@ class MainMenu:
                 elif event.type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == self.multiplayer_btn:
                         if "#multiplayer_btn_red" in self.multiplayer_btn.get_object_ids():
-                            self.config_box.show()
+                            #self.config_box.show()
+                            self.setup_multiplayer_connect()
+                            return
                         elif self.server is not None:
                             self.game_cfg_box.show()
                         elif self.client is not None:
@@ -359,6 +380,18 @@ class MainMenu:
                             js.navigator.clipboard.writeText(f"{js.window.location.protocol}//{js.window.location.host}/?host={self.client.HOST}&port={self.client.PORT}&squadmate={self.client.uuid}")
 
                             pygame_gui.windows.UIMessageWindow(pg.Rect(self.display_surf.width // 2 - 150, self.display_surf.height // 2 - 75, 300, 150), "Copied invite link to clipboard!", self.manager, window_title="Invite Players")
+
+                    elif event.ui_element == self.ready_btn:
+                        self.toggle_ready()
+
+                    elif event.ui_element == self.left_btn:
+                        self.player.shape_index -= 1
+                        if self.player.shape_index < 0:
+                            self.player.shape_index = len(self.shape_names) - 1
+                    elif event.ui_element == self.right_btn:
+                        self.player.shape_index += 1
+                        if self.player.shape_index >= len(self.shape_names):
+                            self.player.shape_index = 0
 
                 self.manager.process_events(event)
 
@@ -529,7 +562,7 @@ class EndScreen:
                              self.small_font.render(f"{winner.shots_hit} shots hit", True, (255, 255, 255)),
                              self.small_font.render(f"{(winner.shots_hit / (winner.shots_fired + 0.00000000000000000001) * 100):.2f}% accuracy", True, (255, 255, 255))]
 
-        self.info_lbl = self.medium_font.render   ("Press Enter to continue...", True, (255, 255, 255))
+        self.info_lbl = self.medium_font.render   ("Press Enter or tap to continue...", True, (255, 255, 255))
         self.info_lbl.blit(self.medium_font.render("      Enter", True, (0, 255, 0)))
 
     def draw(self) -> None:

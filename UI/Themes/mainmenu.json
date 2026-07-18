@@ -69,5 +69,25 @@
             "shape": "rounded_rectangle",
             "shape_corner_radius": "20"
         }
+    },
+    "#card_btn":
+    {
+        "colors":
+        {
+            "normal_bg": "#333333",
+            "normal_border": "#333333",
+            "active_bg": "#888888"
+        },
+        "font":
+        {
+            "name": "arial",
+            "size": "18",
+            "bold": 1
+        },
+        "misc":
+        {
+            "shape": "rounded_rectangle",
+            "shape_corner_radius": "20"
+        }
     }
 }

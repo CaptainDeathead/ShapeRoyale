@@ -785,10 +785,12 @@ class ShapeRoyale:
                 if event.type == pg.FINGERDOWN:
                     self.active_fingers[event.finger_id] = (event.x*self.WIDTH, event.y*self.HEIGHT)
 
+                    if self.end_screen is not None:
+                        await self.restart()
+                        return
+
                 if event.type == pg.FINGERMOTION:
                     self.active_fingers[event.finger_id] = (event.x*self.WIDTH, event.y*self.HEIGHT)
-                    import js
-                    js.console.log(f"X: {event.x*self.WIDTH}, Y: {event.y*self.HEIGHT}")
 
                 self.manager.process_events(event)
 
@@ -1149,6 +1151,9 @@ class ShapeRoyale:
                         all_players = [player for player in self.players]
                         all_players.extend(list(reversed(self.dead_players)))
                         self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+
+                # Disable leaderboard because its annoying
+                self.leaderboard = None
 
             self.eventfeed.update(dt)
             self.manager.draw_ui(self.screen)
