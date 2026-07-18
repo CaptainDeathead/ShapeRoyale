@@ -775,7 +775,7 @@ class ShapeRoyale:
                             await self.restart()
                             return
 
-                if event.type == pg.FINGERMOTION:
+                if event.type == pg.FINGERDOWN:
                     fingermotion_events.append((event.x, event.y, event.finger_id))
 
                 self.manager.process_events(event)
