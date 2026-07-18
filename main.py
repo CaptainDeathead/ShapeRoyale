@@ -1097,7 +1097,7 @@ class ShapeRoyale:
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
 
-            self.movement_joystick.draw([(x, y, finger_id) for finger_id, (x, y) in self.active_fingers.values()])
+            self.movement_joystick.draw([(x, y, finger_id) for finger_id, (x, y) in self.active_fingers.items()])
             #self.aim_joystick.draw(fingermotion_events)
 
             if self.spectating:
