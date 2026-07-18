@@ -330,7 +330,7 @@ class ShapeRoyale:
         self.has_done_bonus_powerups = False
 
         self.movement_joystick = TouchJoystick(self.screen, (300, self.screen.height - 300))
-        #self.aim_joystick = TouchJoystick(self.screen, (self.screen.width - 300, self.screen.height - 300))
+        self.aim_joystick = TouchJoystick(self.screen, (self.screen.width - 300, self.screen.height - 300))
 
         self.active_fingers = {}
 
@@ -865,9 +865,9 @@ class ShapeRoyale:
                     self.player.move_down(self.movement_joystick.joy_y * dt)
                     self.player.rotation = -self.movement_joystick.joy_angle - 90
 
-                #if self.aim_joystick.joy_x != 0 or self.aim_joystick.joy_y != 0:
-                #    self.player.rotation = -self.aim_joystick.joy_angle - 90
-                #    self.player.shoot()
+                if self.aim_joystick.joy_x != 0 or self.aim_joystick.joy_y != 0:
+                    self.player.rotation = -self.aim_joystick.joy_angle - 90
+                    #self.player.shoot()
 
                 if self.client is not None:
                     if not self.spectating:
@@ -1097,8 +1097,9 @@ class ShapeRoyale:
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
 
-            self.movement_joystick.draw([(x, y, finger_id) for finger_id, (x, y) in self.active_fingers.items()])
-            #self.aim_joystick.draw(fingermotion_events)
+            fingermotion_list = [(x, y, finger_id) for finger_id, (x, y) in self.active_fingers.items()]
+            self.movement_joystick.draw(fingermotion_list)
+            self.aim_joystick.draw(fingermotion_list)
 
             if self.spectating:
                 self.screen.blit(self.spectating_lbl, (self.WIDTH / 2 - self.spectating_lbl.width / 2, 50))
