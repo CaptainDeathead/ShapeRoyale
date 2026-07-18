@@ -775,8 +775,8 @@ class ShapeRoyale:
                             await self.restart()
                             return
 
-                if event.type == pg.FINGERDOWN:
-                    fingermotion_events.append((event.x, event.y, event.finger_id))
+                if event.type == pg.MOUSEBUTTONDOWN:
+                    fingermotion_events.append((event.x, event.y, 0))
 
                 self.manager.process_events(event)
 
