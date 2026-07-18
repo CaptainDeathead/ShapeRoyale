@@ -1,69 +1,40 @@
-import pygame
-import math
+import pygame as pg
+
+from joystick import TouchJoystick
 
 # Initialize Pygame
-pygame.init()
+pg.init()
 
 # Set up the display
-screen = pygame.display.set_mode((400, 400))
-pygame.display.set_caption('Circle with 10 Points as Polygon')
+screen = pg.display.set_mode((400, 400))
+pg.display.set_caption('Joystick test')
 
-# Colors
-WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)
+clock = pg.time.Clock()
 
-# Circle settings
-center = (200, 200)  # Center of the circle
-radius = 200         # Radius of the circle
-num_points = 100      # Number of points
+joystick = TouchJoystick(screen)
 
-# Calculate the points on the circle
-points = []
-for i in range(num_points):
-    angle = 2 * math.pi * i / num_points  # Angle for the point
-    x = center[0] + radius * math.cos(angle)
-    y = center[1] + radius * math.sin(angle)
-    points.append((x, y))
-
-time = 1000*0.5
-
-def shrink(t, p):
-    new_points = []
-    target_radius = 20
-    for point in p:
-        angle_to_target = math.atan2(point[1] - t[1], point[0] - t[0])
-        distance_to_move = math.dist(point, t) - target_radius
-        new_points.append((point[0] - math.cos(angle_to_target) * (distance_to_move / time), point[1] - math.sin(angle_to_target) * (distance_to_move / time)))
-
-    return new_points
-
-target = (150, 150)
-
-clock = pygame.time.Clock()
-
-x, y = 100, 100
-
-# Draw the polygon
 running = True
 while running:
     clock.tick(60)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+
+    fingermotion_events = []
+    for event in pg.event.get():
+        if event.type == pg.QUIT:
             running = False
+        elif event.type == pg.FINGERMOTION:
+            finger_x = event.x
+            finger_y = event.y
+            finger_id = event.finger_id
+            fingermotion_events.append((finger_x, finger_y, finger_id))
 
-    screen.fill(WHITE)
+    finger_x, finger_y = pg.mouse.get_pos()
+    fingermotion_events.append((finger_x, finger_y, 0))
 
-    points = shrink(target, points)
+    screen.fill(0)
 
-    # Draw the polygon by connecting the points
-    actuall_points = [(px - x, py - y) for px, py in points]
-    pygame.draw.polygon(screen, BLUE, actuall_points, 2)
+    joystick.draw(fingermotion_events)
 
-    # Draw the center of the circle for reference
-    pygame.draw.circle(screen, (255, 0, 0), center, 5)
-    pygame.draw.circle(screen, (0, 255, 0), target, 5)
+    pg.display.flip()
 
-    pygame.display.flip()
-
-# Quit Pygame
-pygame.quit()
+# Quit pg
+pg.quit()

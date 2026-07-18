@@ -14,6 +14,7 @@ from utils import AnimManager, FONTS_PATH
 from eventfeed import EventFeed, GameEvent
 
 from leaderboard import Leaderboard
+from joystick import TouchJoystick
 
 from networking import Server, Client, BaseClient, WebSocketServer, WebSocketClient
 
@@ -63,7 +64,7 @@ class Safezone:
     DISTANCE_TO_MOVE_REDUCTION = 1000
     TARGET_RADIUS_ALLOWANCE = 1.05
     SCALING = 80
-    SPEED = 50
+    SPEED = 100
 
     def __init__(self, screen_width: int, screen_height: int, map_size_x: int, map_size_y: int, phase_config: Dict[int, Dict]) -> None:
         self.screen_width = screen_width
@@ -94,6 +95,8 @@ class Safezone:
         if self.phase_index >= len(self.phase_config):
             self.target_radius = 0
             return
+
+        if self.phase_index > 0: return
 
         self.phase_index += 1
 
@@ -324,6 +327,9 @@ class ShapeRoyale:
         self.end_screen = None
         self.has_done_bonus_powerups = False
 
+        self.movement_joystick = TouchJoystick(self.screen, (300, self.screen.height - 300))
+        self.aim_joystick = TouchJoystick(self.screen, (self.screen.width - 300, self.screen.height - 300))
+
         #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in self.players])
         #self.leaderboard.window.hide()
 
@@ -427,6 +433,7 @@ class ShapeRoyale:
             )
             
             curr_squad = []
+            print(f"Squads: {self.main_menu.active_squads}")
             for squad_index, squad in enumerate(self.main_menu.active_squads):
                 if i-1 in squad: # i-1 because the server has been inserted first into the indexes (trust me)
                     curr_squad = squads[squad_index]
@@ -550,7 +557,7 @@ class ShapeRoyale:
             self.starting_player = self.players[self.spectator_index]
 
         if self.server is not None:
-            await asyncio.sleep(1) # Give clients time to catch up
+            await asyncio.sleep(2) # Give clients time to catch up
 
         print("on")
         self.spectator_player = self.player
@@ -622,6 +629,8 @@ class ShapeRoyale:
                             if target_player is not None:
                                 for key, value in update.items():
                                     setattr(target_player, key, value)
+
+                                self.players = [target_player]
 
                         if "player_remove" in query:
                             target_player = None
@@ -736,6 +745,7 @@ class ShapeRoyale:
                                 elif "ping" in query:
                                     await client.send({"answer": {"ping": query["ping"]}})
 
+            fingermotion_events = []
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     if self.server is not None:
@@ -765,7 +775,12 @@ class ShapeRoyale:
                             await self.restart()
                             return
 
+                if event.type == pg.FINGERMOTION:
+                    fingermotion_events.append((event.x, event.y, event.finger_id))
+
                 self.manager.process_events(event)
+
+            #fingermotion_events.append((pg.mouse.get_pos()[0], pg.mouse.get_pos()[1], 0))
 
             num_powerups = len(self.powerups)
             num_powerups_in_sec = 0
@@ -811,10 +826,19 @@ class ShapeRoyale:
             keys = pg.key.get_pressed()
 
             if not self.spectating:
-                if keys[pg.K_w]: self.player.move_up(dt)
-                if keys[pg.K_d]: self.player.move_right(dt)
-                if keys[pg.K_s]: self.player.move_down(dt)
-                if keys[pg.K_a]: self.player.move_left(dt)
+                key_movement = False
+                if keys[pg.K_w]:
+                    self.player.move_up(dt)
+                    key_movement = True
+                if keys[pg.K_d]:
+                    self.player.move_right(dt)
+                    key_movement = True
+                if keys[pg.K_s]:
+                    self.player.move_down(dt)
+                    key_movement = True
+                if keys[pg.K_a]:
+                    self.player.move_left(dt)
+                    key_movement = True
 
                 if keys[pg.K_UP]: self.player.rotation = 0
                 elif keys[pg.K_RIGHT]: self.player.rotation = 270
@@ -823,6 +847,15 @@ class ShapeRoyale:
 
                 mx, my = pg.mouse.get_pos()
                 self.player.rotation = -degrees(atan2((self.HEIGHT / 2 - my), (self.WIDTH / 2 - mx))) + 90
+
+                if (self.movement_joystick.joy_x != 0 or self.movement_joystick.joy_y != 0) and not key_movement:
+                    self.player.move_right(self.movement_joystick.joy_x * dt)
+                    self.player.move_down(self.movement_joystick.joy_y * dt)
+                    self.player.rotation = -self.movement_joystick.joy_angle - 90
+
+                if self.aim_joystick.joy_x != 0 or self.aim_joystick.joy_y != 0:
+                    self.player.rotation = -self.aim_joystick.joy_angle - 90
+                    self.player.shoot()
 
                 if self.client is not None:
                     if not self.spectating:
@@ -1051,6 +1084,9 @@ class ShapeRoyale:
 
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
+
+            self.movement_joystick.draw(fingermotion_events)
+            self.aim_joystick.draw(fingermotion_events)
 
             if self.spectating:
                 self.screen.blit(self.spectating_lbl, (self.WIDTH / 2 - self.spectating_lbl.width / 2, 50))
