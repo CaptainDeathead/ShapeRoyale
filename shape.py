@@ -436,8 +436,13 @@ class Shape:
         if not pg.Rect(self.x, self.y, image.width, image.height).colliderect(screen_rect): return
 
         screen.blit(image, (self.x - screen_rect.x, self.y - screen_rect.y))
-        screen.blit(self.info_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30))
+        #screen.blit(self.info_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30))
         screen.blit(self.name_surf, (self.x - screen_rect.x - 100, self.y - screen_rect.y - 60))
+
+        pg.draw.rect(screen, (90, 90, 90), (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30, self.max_hp, 40 // 2))
+        pg.draw.rect(screen, (90, 90, 90), (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30 + 40 // 2, self.max_shield, 40 // 2))
+        pg.draw.rect(screen, (0, 255, 0), (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30, self.hp, 40 // 2))
+        pg.draw.rect(screen, (0, 0, 255), (self.x - screen_rect.x - 100, self.y - screen_rect.y - 30 + 40 // 2, self.shield, 40 // 2))
 
         if self.showing_powerup_popup and draw_parent is self and self.is_player:
             if time() - self.powerup_popup_create_time > 3:

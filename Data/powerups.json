@@ -1,6 +1,6 @@
 {
     "Common": {
-        "spawn_chance": 0.44,
+        "spawn_chance": 0.01,
         "color": "(0, 200, 0)",
         "types": {
             "Health Pack": {
@@ -36,7 +36,7 @@
         }
     },
     "Uncommon": {
-        "spawn_chance": 0.35,
+        "spawn_chance": 0.2,
         "color": "(0, 0, 255)",
         "types": {
             "Sniper": {
@@ -78,7 +78,7 @@
         }
     },
     "Rare": {
-        "spawn_chance": 0.2,
+        "spawn_chance": 0.35,
         "color": "(150, 0, 255)",
         "types": {
             "Blood Donor": {
@@ -108,7 +108,7 @@
         }
     },
     "Legendary": {
-        "spawn_chance": 0.01,
+        "spawn_chance": 0.44,
         "color": "(255, 215, 0)",
         "types": {
             "Pacemaker": {
