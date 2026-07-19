@@ -37,6 +37,7 @@ startup_str = """
 
 print(startup_str)
 
+os.environ["SDL_RENDER_SCALE_QUALITY"] = "1"
 pg.init()
 
 class Sound:
