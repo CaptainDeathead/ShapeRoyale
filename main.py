@@ -38,6 +38,11 @@ startup_str = """
 print(startup_str)
 
 os.environ["SDL_RENDER_SCALE_QUALITY"] = "1"
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == "host":
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+
 pg.init()
 
 class Sound:
@@ -291,6 +296,7 @@ class ShapeRoyale:
 
         self.players = []
         self.powerups = []
+        self.next_powerup_index = 0
 
         self.powerup_stage_1_seed = randrange(2**32)
         self.powerup_stage_2_seed = randrange(2**32)
@@ -485,9 +491,10 @@ class ShapeRoyale:
             elif rarity_number <= legendary_rarity_max + rare_rarity_max + uncommon_rarity_max: rarity = "Uncommon"
             else: rarity = "Common"
 
-            powerup = Powerup(rng.randint(spawn_min_x, spawn_max_x), rng.randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup, starting_index+i, rng.choice(list(self.powerup_info[rarity]["types"])))
+            powerup = Powerup(rng.randint(spawn_min_x, spawn_max_x), rng.randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup, self.next_powerup_index, rng.choice(list(self.powerup_info[rarity]["types"])))
             powerups.append(powerup)
             self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].append(powerup)
+            self.next_powerup_index += 1
 
         return powerups
 
@@ -957,8 +964,17 @@ class ShapeRoyale:
                         self.bullets.remove(bullet)
 
                 if self.server is not None:
+                    sent_clients = []
                     if player.index != 0 and player.index <= len(self.server.clients):
                         await self.server.clients[player.index-1].send({"answer": {"set_bullets": [bullet.to_dict() for bullet in close_bullets]}})
+                        sent_clients.append(player.index-1)
+
+                    """
+                    for client_index, client in enumerate(self.server.clients):
+                        # send all bullets because they are spectating
+                        if client_index not in sent_clients:
+                            await client.send({"answer": {"set_bullets": [bullet.to_dict() for bullet in self.bullets]}})
+                    """
 
                 close_powerups = []
                 closest_powerup = None
@@ -1057,9 +1073,11 @@ class ShapeRoyale:
                     self.spectating = True
 
                 for rarity, powerup_info, on_pickup in dead_player.collected_powerups:
-                    new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup, len(self.powerups))
-                    self.powerups.append(new_powerup)
-                    self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
+                    if self.client is None:
+                        new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup, self.next_powerup_index)
+                        self.powerups.append(new_powerup)
+                        self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
+                        self.next_powerup_index += 1
 
                     if self.server is not None:
                         for client in self.server.clients:

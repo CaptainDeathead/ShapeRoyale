@@ -37,6 +37,12 @@ startup_str = """
 
 print(startup_str)
 
+os.environ["SDL_RENDER_SCALE_QUALITY"] = "1"
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == "host":
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+
 pg.init()
 
 class Sound:
@@ -166,6 +172,8 @@ class ShapeRoyale:
 
     MAX_BULLET_TRAVEL_DIST = 2000
 
+    BG_COLOR = (0, 0, 0)
+
     def __init__(self, display_surf: pg.Surface | None = None, client: Client | None = None, server: Server | None = None, main_menu_manager: pygame_gui.UIManager | None = None) -> None:
         if not (self.NUM_POWERUPS / self.NUM_POWERUP_SECTIONS).is_integer() or self.NUM_POWERUPS % self.NUM_POWERUP_SECTIONS != 0:
             raise Exception("NUM_POWERUPS must be divisible by NUM_POWERUP_SECTIONS such that the resualt is a valid integer!")
@@ -288,6 +296,7 @@ class ShapeRoyale:
 
         self.players = []
         self.powerups = []
+        self.next_powerup_index = 0
 
         self.powerup_stage_1_seed = randrange(2**32)
         self.powerup_stage_2_seed = randrange(2**32)
@@ -329,6 +338,8 @@ class ShapeRoyale:
 
         self.movement_joystick = TouchJoystick(self.screen, (300, self.screen.height - 300))
         self.aim_joystick = TouchJoystick(self.screen, (self.screen.width - 300, self.screen.height - 300))
+
+        self.active_fingers = {}
 
         #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in self.players])
         #self.leaderboard.window.hide()
@@ -480,9 +491,10 @@ class ShapeRoyale:
             elif rarity_number <= legendary_rarity_max + rare_rarity_max + uncommon_rarity_max: rarity = "Uncommon"
             else: rarity = "Common"
 
-            powerup = Powerup(rng.randint(spawn_min_x, spawn_max_x), rng.randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup, starting_index+i, rng.choice(list(self.powerup_info[rarity]["types"])))
+            powerup = Powerup(rng.randint(spawn_min_x, spawn_max_x), rng.randint(spawn_min_y, spawn_max_y), rarity, self.powerup_info, self.on_powerup_pickup, self.next_powerup_index, rng.choice(list(self.powerup_info[rarity]["types"])))
             powerups.append(powerup)
             self.powerup_grid[floor(powerup.y / self.POWERUP_SECTION_SIZE)][floor(powerup.x / self.POWERUP_SECTION_SIZE)].append(powerup)
+            self.next_powerup_index += 1
 
         return powerups
 
@@ -745,7 +757,6 @@ class ShapeRoyale:
                                 elif "ping" in query:
                                     await client.send({"answer": {"ping": query["ping"]}})
 
-            fingermotion_events = []
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     if self.server is not None:
@@ -775,8 +786,19 @@ class ShapeRoyale:
                             await self.restart()
                             return
 
+                if event.type == pg.FINGERUP:
+                    if event.finger_id in self.active_fingers:
+                        del self.active_fingers[event.finger_id]
+
+                if event.type == pg.FINGERDOWN:
+                    self.active_fingers[event.finger_id] = (event.x*self.WIDTH, event.y*self.HEIGHT)
+
+                    if self.end_screen is not None:
+                        await self.restart()
+                        return
+
                 if event.type == pg.FINGERMOTION:
-                    fingermotion_events.append((event.x, event.y, event.finger_id))
+                    self.active_fingers[event.finger_id] = (event.x*self.WIDTH, event.y*self.HEIGHT)
 
                 self.manager.process_events(event)
 
@@ -796,7 +818,7 @@ class ShapeRoyale:
             self.anim_manager.update(dt)
             self.safezone.update(dt)
 
-            self.screen.fill((0, 0, 0))
+            self.screen.fill(self.BG_COLOR)
 
             gridline_spacing = 400
             shifted_player_x = int(self.player.x - self.player.x % gridline_spacing)
@@ -855,7 +877,7 @@ class ShapeRoyale:
 
                 if self.aim_joystick.joy_x != 0 or self.aim_joystick.joy_y != 0:
                     self.player.rotation = -self.aim_joystick.joy_angle - 90
-                    self.player.shoot()
+                    #self.player.shoot()
 
                 if self.client is not None:
                     if not self.spectating:
@@ -942,8 +964,17 @@ class ShapeRoyale:
                         self.bullets.remove(bullet)
 
                 if self.server is not None:
+                    sent_clients = []
                     if player.index != 0 and player.index <= len(self.server.clients):
                         await self.server.clients[player.index-1].send({"answer": {"set_bullets": [bullet.to_dict() for bullet in close_bullets]}})
+                        sent_clients.append(player.index-1)
+
+                    """
+                    for client_index, client in enumerate(self.server.clients):
+                        # send all bullets because they are spectating
+                        if client_index not in sent_clients:
+                            await client.send({"answer": {"set_bullets": [bullet.to_dict() for bullet in self.bullets]}})
+                    """
 
                 close_powerups = []
                 closest_powerup = None
@@ -1042,9 +1073,11 @@ class ShapeRoyale:
                     self.spectating = True
 
                 for rarity, powerup_info, on_pickup in dead_player.collected_powerups:
-                    new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup, len(self.powerups))
-                    self.powerups.append(new_powerup)
-                    self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
+                    if self.client is None:
+                        new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, powerup_info, on_pickup, self.next_powerup_index)
+                        self.powerups.append(new_powerup)
+                        self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
+                        self.next_powerup_index += 1
 
                     if self.server is not None:
                         for client in self.server.clients:
@@ -1085,8 +1118,9 @@ class ShapeRoyale:
             pg.draw.rect(self.screen, (255, 255, 255), (self.WIDTH - 252, 48, 204, 204), width=2)
             self.screen.blit(self.minimap_surf, (self.WIDTH - 250, 50))
 
-            self.movement_joystick.draw(fingermotion_events)
-            self.aim_joystick.draw(fingermotion_events)
+            fingermotion_list = [(x, y, finger_id) for finger_id, (x, y) in self.active_fingers.items()]
+            self.movement_joystick.draw(fingermotion_list)
+            self.aim_joystick.draw(fingermotion_list)
 
             if self.spectating:
                 self.screen.blit(self.spectating_lbl, (self.WIDTH / 2 - self.spectating_lbl.width / 2, 50))
@@ -1130,12 +1164,15 @@ class ShapeRoyale:
                 if not hasattr(self, "leaderboard"):
                     all_players = [player for player in self.players]
                     all_players.extend(list(reversed(self.dead_players)))
-                    self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+                    #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
                 else:
                     if self.leaderboard is None:
                         all_players = [player for player in self.players]
                         all_players.extend(list(reversed(self.dead_players)))
-                        self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+                        #self.leaderboard = Leaderboard(self.screen, self.manager, [self.player_lb_info(player) for player in all_players])
+
+                # Disable leaderboard because its annoying
+                #self.leaderboard = None
 
             self.eventfeed.update(dt)
             self.manager.draw_ui(self.screen)

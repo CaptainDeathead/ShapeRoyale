@@ -370,9 +370,11 @@ class MainMenu:
                 elif event.type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == self.multiplayer_btn:
                         if "#multiplayer_btn_red" in self.multiplayer_btn.get_object_ids():
-                            #self.config_box.show()
-                            self.setup_multiplayer_connect()
-                            return
+                            if pg.key.get_pressed()[pg.K_LSHIFT]:
+                                self.config_box.show()
+                            else:
+                                self.setup_multiplayer_connect()
+                                return
                         elif self.server is not None:
                             self.game_cfg_box.show()
                         elif self.client is not None:
