@@ -9,7 +9,8 @@
         "damage": 8,
         "speed": 20,
         "bullet_speed": 10.0,
-        "penetration": 1.2
+        "penetration": 1.2,
+        "drops": 4
     },
     "Triangle": {
         "class": "Agility",
@@ -21,7 +22,8 @@
         "damage": 6,
         "speed": 25,
         "bullet_speed": 10.0,
-        "penetration": 1.1
+        "penetration": 1.1,
+        "drops": 3
     },
     "Circle": {
         "class": "Strength",
@@ -33,6 +35,7 @@
         "damage": 10,
         "speed": 15,
         "bullet_speed": 10.0,
-        "penetration": 1.5
+        "penetration": 1.5,
+        "drops": 5
     }
 }

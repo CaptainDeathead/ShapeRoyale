@@ -41,7 +41,7 @@ class Shape:
         "shield_regen_rate": float('inf'),
         "lifesteal": float('inf'),
         "poison_damage": float('inf'),
-        "zone_resistance": 100.0,
+        "zone_resistance": 3,
         "health_regen_rate": float('inf'),
         "damage_growth": float('inf')
     }
@@ -91,6 +91,7 @@ class Shape:
         self.zone_resistance = 1.0 # percent
         self.health_regen_rate = self.info["health_regen"] # literal
         self.damage_growth = 0.0 # percent
+        self.drops = self.info["drops"] # literal
 
         self.hp = self.max_hp
         self.shield = self.max_shield
@@ -392,7 +393,10 @@ class Shape:
             self.move_to(self.target[0], self.target[1], dt)
 
             if dist((self.x, self.y), self.target) < 40:
-                self.target = (randint(wall_positions[0], wall_positions[1]), randint(wall_positions[2], wall_positions[3]))
+                try:
+                    self.target = (randint(wall_positions[0], wall_positions[1]), randint(wall_positions[2], wall_positions[3]))
+                except Exception as e:
+                    print(f"Targeting exception: {e}! Almost certainly due to zone fully closed.")
 
     def render_info_surf(self) -> None:
         self.info_surf.fill((90, 90, 90))
