@@ -174,11 +174,9 @@ class MainMenu:
                 loading_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 60).render("Waiting for host...", True, (255, 255, 255))
                 extra_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 40).render("'enter' to unready", True, (255, 255, 255))
                 extra_color_lbl = pg.font.Font(f"{FONTS_PATH}/PressStart2P.ttf", 40).render(" enter            ", True, (0, 255, 0))
-                self.display_surf.blit(loading_lbl, (self.width // 2 - loading_lbl.width // 2, self.height // 2 - loading_lbl.height // 2))
-                self.display_surf.blit(extra_lbl, (self.width // 2 - extra_lbl.width // 2, self.height // 2 - extra_lbl.height // 2 + loading_lbl.height))
-                self.display_surf.blit(extra_color_lbl, (self.width // 2 - extra_color_lbl.width // 2, self.height // 2 - extra_color_lbl.height // 2 + loading_lbl.height))
 
                 server_ready = False
+                all_players_in = {}
                 while not server_ready:
                     dt = self.clock.tick(60) / 1000.0
                     await asyncio.sleep(0)
@@ -200,6 +198,8 @@ class MainMenu:
 
                         self.manager.process_events(event)
 
+                    self.display_surf.fill(0)
+
                     self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
                     #print("waiting for data stream")
@@ -210,9 +210,21 @@ class MainMenu:
                                 js.console.log("sending starting info")
                                 self.client.send({"answer": {"send_starting_info": {"shape_index": self.player.shape_index, "name": self.player_name}}})
                                 server_ready = True
-                            elif dtype == "answer" and "wall_update" in query:
-                                self.spectating = True
-                                self.start_game = True
+                            elif dtype == "answer":
+                                if "wall_update" in query:
+                                    self.spectating = True
+                                    self.start_game = True
+                                elif "all_players_in" in query:
+                                    all_players_in = query["all_players_in"]
+
+                    self.display_surf.blit(loading_lbl, (self.width // 2 - loading_lbl.width // 2, self.height // 2 - loading_lbl.height // 2))
+                    self.display_surf.blit(extra_lbl, (self.width // 2 - extra_lbl.width // 2, self.height // 2 - extra_lbl.height // 2 + loading_lbl.height))
+                    self.display_surf.blit(extra_color_lbl, (self.width // 2 - extra_color_lbl.width // 2, self.height // 2 - extra_color_lbl.height // 2 + loading_lbl.height))
+                    
+                    self.display_surf.blit(self.fonts["small"].render("All players:", True, (255, 255, 255)), (self.width // 2 - 820, self.height // 2 - 230))
+                    for i, player_info in all_players_in.items():
+                        player_ready, player_name = player_info.values()
+                        self.display_surf.blit(self.fonts["small"].render(f"{player_name} - Ready: {player_ready}", True, (255, 255, 255)), (self.width // 2 - 800, self.height // 2 - 200 + (30 * int(i))))
 
                     #self.manager.update(dt)
                     #self.manager.draw_ui(self.display_surf)
@@ -318,6 +330,9 @@ class MainMenu:
 
     async def main(self) -> None:
         last_squad_join_req = 0
+        all_players_in = {}
+        last_players_in_update = time()
+
         while not self.start_game:
             self.display_surf.fill((0, 0, 0))
             dt = self.clock.tick(60) / 1000.0
@@ -424,6 +439,7 @@ class MainMenu:
                     player_ready, player_name = player_info.values()
                     self.display_surf.blit(self.fonts["small"].render(f"{player_name} - Ready: {player_ready}", True, (255, 255, 255)), (self.width // 2 + 300, self.height // 2 - 200 + (30 * i)))
 
+                updated_players_in = False
                 for i, client in enumerate(self.server.clients):
                     for message in client.data_stream:
                         for dtype, query in message.items():
@@ -500,11 +516,23 @@ class MainMenu:
 
                                 self.player_info[i] = {"ready": query["ready"], "name": player_name}
 
+                    if time() - last_players_in_update > 0.5:
+                        updated_players_in = True
+                        await client.send({"answer": {"all_players_in": self.player_info}})
+
+                if updated_players_in:
+                    last_players_in_update = time()
+
             if self.client is not None:
                 if len(self.squad) > 0:
                     self.display_surf.blit(self.fonts["small"].render("Squad:", True, (255, 255, 255)), (self.width // 2 + 280, self.height // 2 - 230))
                     for i, (name, index, player_ready) in enumerate(self.squad):
                         self.display_surf.blit(self.fonts["small"].render(f"{name} - Ready: {player_ready}", True, (0, 255, 0)), (self.width // 2 + 300, self.height // 2 - 200 + (30 * i)))
+
+                self.display_surf.blit(self.fonts["small"].render("All players:", True, (255, 255, 255)), (self.width // 2 - 820, self.height // 2 - 230))
+                for i, player_info in all_players_in.items():
+                    player_ready, player_name = player_info.values()
+                    self.display_surf.blit(self.fonts["small"].render(f"{player_name} - Ready: {player_ready}", True, (255, 255, 255)), (self.width // 2 - 800, self.height // 2 - 200 + (30 * int(i))))
 
                 self.client.send({"answer": {"ready": self.player.ready, "name": self.player_name}})
 
@@ -523,6 +551,8 @@ class MainMenu:
                                 self.start_game = True
                             elif "squad_info" in query:
                                 self.squad = query["squad_info"]
+                            elif "all_players_in" in query:
+                                all_players_in = query["all_players_in"]
 
             await self.check_game_start()
 

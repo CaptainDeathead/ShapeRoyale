@@ -1083,6 +1083,29 @@ class ShapeRoyale:
                         for client in self.server.clients:
                             await client.send({"answer": {"powerup_add": new_powerup.to_dict()}})
 
+                if self.client is None:
+                    common_rarity_max = self.powerup_info["Common"]["spawn_chance"]
+                    uncommon_rarity_max = self.powerup_info["Uncommon"]["spawn_chance"]
+                    rare_rarity_max = self.powerup_info["Rare"]["spawn_chance"]
+                    legendary_rarity_max = self.powerup_info["Legendary"]["spawn_chance"]
+
+                    for _ in range(dead_player.drops):
+                        rarity_number = uniform(0.0, 1.0)
+
+                        if rarity_number <= legendary_rarity_max: rarity = "Legendary"
+                        elif rarity_number <= legendary_rarity_max + rare_rarity_max: rarity = "Rare"
+                        elif rarity_number <= legendary_rarity_max + rare_rarity_max + uncommon_rarity_max: rarity = "Uncommon"
+                        else: rarity = "Common"
+
+                        new_powerup = Powerup(min(self.MAP_SIZE_X - 1, max(0, dead_player.x + randint(-50, 50))), min(self.MAP_SIZE_Y-1, max(0, dead_player.y + randint(-50, 50))), rarity, self.powerup_info, self.on_powerup_pickup, self.next_powerup_index, choice(list(self.powerup_info[rarity]["types"])))
+                        self.powerups.append(new_powerup)
+                        self.powerup_grid[floor(new_powerup.y / self.POWERUP_SECTION_SIZE)][floor(new_powerup.x / self.POWERUP_SECTION_SIZE)].append(new_powerup)
+                        self.next_powerup_index += 1
+
+                        if self.server is not None:
+                            for client in self.server.clients:
+                                await client.send({"answer": {"powerup_add": new_powerup.to_dict()}})
+
                 if self.server is not None:
                     for client in self.server.clients:
                         await client.send({"answer": {"player_remove": dead_player.index}})
